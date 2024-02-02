@@ -11,7 +11,7 @@ Feel free to explore each project folder for more details.
 ## Project 1: Custom Expectation-Maximisation Algorithm Implementation
 
 ### Tweet: Crafted Complex Algorithm from Scratch
-<img src="./img/convergence.png" width=50%, alt = "Algorithm Preview">
+<img src="./img/convergence.png" width=75%, alt = "Algorithm Preview">
 
 - **Please open:**
   - [SCwR_A3](https://github.com/ValentinK214/leiden_public/blob/main/SCwR-EM_algo/kodderitzsch_valentin_SCwR_A3.pdf) - The project report
@@ -44,7 +44,7 @@ Feel free to explore each project folder for more details.
 
 
 ## Project 2: Comprehensive Summary of all Data Visualization Types
-<img src="./img/long.png" width=50%, alt = "Visualization Preview">
+<img src="./img/long.png" width=75%, alt = "Visualization Preview">
 
 - **Please open:**
   - [Summary of Visualization Types](https://github.com/ValentinK214/leiden_public/blob/main/SCwR-data_viz/all_visualistions_doc.pdf).
