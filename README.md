@@ -10,12 +10,15 @@ Feel free to explore each project folder for more details.
 
 ## Project 1: Custom Expectation-Maximisation Algorithm Implementation
 
+### Tweet: Crafted Complex Algorithm from Scratch
+![Convergence](./img/convergence.png)
+
+- **Please open:**
+  - [SCwR_A3](https://github.com/ValentinK214/leiden_public/blob/main/SCwR-EM_algo/kodderitzsch_valentin_SCwR_A3.pdf) - The project report
+
 - **Description:**
   - Detailed information about this project can be found in the file called [assignment.pdf](https://github.com/ValentinK214/leiden_public/blob/main/SCwR-EM_algo/Assignment.pdf). In summary, the goal was to develop the Expectation-Maximization (EM) algorithm from scratch for mixed model parameters estimation, using only the lecture slides.
   - Key Technology: R (base, ggplot2)
-
-- **Special Emphasis:**
-  - Explore the EM report: [SCwR_A3](https://github.com/ValentinK214/leiden_public/blob/main/SCwR-EM_algo/kodderitzsch_valentin_SCwR_A3.pdf).
 
 - **Achievements:**
   - Implemented using Test Driven Development (TDD) strategies, ensuring high code quality and correctness.
@@ -41,13 +44,14 @@ Feel free to explore each project folder for more details.
 
 
 ## Project 2: Comprehensive Summary of all Data Visualization Types
+![Visualization Preview](./img/long.png)
+
+- **Please open:**
+  - [Summary of Visualization Types](https://github.com/ValentinK214/leiden_public/blob/main/SCwR-data_viz/all_visualistions_doc.pdf).
 
 - **Description:**
   - This project involves creating a comprehensive document in preparation for the Statistical Computing with R exam. It covers my interpretation of all mono and bivariate visualization types, plus their group comparisions.
   - Key Technology: R (base, ggplot2)
-
-- **Special Emphasis:**
-  - Explore the document: [Summary of Visualization Types](https://github.com/ValentinK214/leiden_public/blob/main/SCwR-data_viz/all_visualistions_doc.pdf).
 
 - **Key Learnings:**
   1. Identified 11 fundamental visualization types, consolidating diverse visualizations into these categories.
