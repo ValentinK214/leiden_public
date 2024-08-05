@@ -32,3 +32,8 @@ This group project was part of my [Causal Inference](https://studiegids.universi
     - Finding causal relationships is challenging without experimental data
     - Unmeasured factors can significantly impact results
     - Working as a team of researchers is fun, especially when you get to bounce ideas and make judgement calls as a group
+
+- **Interesting Sections from the Report:**
+    - Section 3: Research Question
+    - Section 5: Methodology
+    - Section 7: Discussion
