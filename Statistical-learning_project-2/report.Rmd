@@ -1,0 +1,840 @@
+---
+title: "Assignment 2"
+author: "Valentin Kodderitzsch 3895157"
+date: "2024-05-17"
+output: pdf_document
+urlcolor: blue
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F)
+knitr::opts_chunk$set(include = F)
+```
+
+# Q1 Method choice
+
+*Select three supervised learning methods from those that were discussed
+in weeks 9 through 11 for analyzing this dataset. Justify why you would
+select each of these methods for this specific prediction problem. (Use
+max. 200-250 words per method.)*
+
+*(720 words)*
+
+```{r}
+# Packages
+library(dplyr)
+library(ggplot2)
+library(GGally)
+library(mgcv)
+library(partykit)
+library(gbm)
+
+setwd("/Users/valentinkodderitzsch/Coding/r-for-stats/semester_2/statistical_learning/Assignments_graded/assignment_2")
+
+# Read data
+MH_dat <- read.table("MHpredict.csv", sep = ",", header = TRUE, stringsAsFactors = TRUE)
+
+# Encode as factor, needed later for Ctree model
+MH_dat_factor = MH_dat |> mutate_if(is.logical, factor)
+```
+
+## Introduction
+
+The goal of this analysis is to predict the severity of depressive
+symptoms at 12 months after the beginning of the study. Various
+characteristics of 1500 adults in the Netherlands have been measured for
+this purpose at the start. The target audience of this analysis are
+researchers in the life and behavior sciences, so models should should
+be interpretable/easy to use and allow for inference as well.
+
+
+```{r, include=T, message = F}
+# Plot the data
+MH_numeric = MH_dat |> select_if(is.numeric)
+ggpairs(MH_numeric, lower = list(continuous = wrap("points", alpha = 0.8, size = 0.2)) )
+```
+
+The given data set has 1500 observations, 20 predictors (8 numeric, 12
+categorical) and 1 numeric response variable. For the training set
+question 2 asks us to use 1000 observations, resulting in 50
+observations per predictor (ie $p<N$), so likelihood based models like
+GAMs can be fitted. Based on the [10:1
+rule](https://online.stat.psu.edu/stat462/node/185/#:~:text=A%20common%20rule%20of%20thumb,model%20satisfies%20the%20LINE%20conditions.)
+for regression models, the data set is relatively large, so high
+variance/low bias models like boosted ensembles should be safe to fit if
+tuned correctly. Regarding the irreducible error (ie noise), it is hard
+to tell before fitting the models as we have no additional context. But
+a noisy dataset would favor higher bias models like a GAM to avoid
+overfitting. Also, based on the uni-variate density plots above, we can
+observe five out of eight numeric predictors to be skewed or
+non-normally distributed. This could hint at potential non-linearities.
+Also, it might be sensible to fit models with and without interaction
+terms. The need for interaction terms cannot be determined beforehand.
+
+## Supervised learning method selection
+
+I will choose two methods to focus on interpretability and inference
+while the third one focuses pure predictive performance to ensure a
+balanced approach for my target audience.
+
+For the simplest, most interpretable method I chose the conditional
+inference tree model (CTree). A CTree is a good choice as researchers
+are presented a single tree with limited number of predictors. The tree
+is also a decision diagram which reads from top to bottom, so
+researchers can easily make a prediction without having to calculate.
+Additionally, researchers can identify the most important predictor at
+the top (root) of the tree. Predictor importance is presented in
+descending order as you traverse down the tree, so the least important
+predictors are at the bottom of the tree. I chose the CTree over a
+single tree fitted using cross validation (ie a pruned tree) because a
+CTree does not suffer from variable selection bias unlike the pruned
+tree method. Thus, CTrees generalise better. However, CTrees are sensitive
+to the data (ie are high variance/low bias) and researchers might not be
+happy with their predictive performance. Additionally, CTrees do not
+allow for inference and assume interaction terms (unless you specify a
+tree depth of 1).
+
+To allow for inference, I chose a generalised additive model
+(GAM). Researchers might prefer a GAM over a CTree, as it has better
+predictive performance while allowing for inference. The performance
+increase comes from the additivity assumption, so no interaction terms,
+which leads to a more biased model that generalises better compared to a
+CTree. So researchers can
+examine the main effect of each variable while holding all other
+variables constant. GAMs can also be a potential high bias model when considering the
+data size. Additionally, researchers can infer the predictor
+importance via their p-values. Also, GAMs can fit non-linear
+relationships while still being easily interpretable. Smoothing could be relevant as the above plots hinted at non-linearities. 
+Even though a GAM is likely the most balanced model, some researchers might prefer an uber predictive model.
+
+For pure predictive performance I chose a boosted ensemble tree model as it is potentially the best performing model compared to the CTree and GAM, if tuned correctly. Additionally, it tends to performs best within the
+class of ensemble tree models. This is because boosting 
+is a sequential tree fitting procedure, opposed to bagging and random forest which are both variations
+of bootstrap sampling and averaging trees. Thus, boosting tends to better capture complex, non-liner relationships.
+Boosting also allows for variable ranking
+whereas other black-box models such as SVMs do not allow for this.
+However, additionally to interpretability and inference issues,
+researchers might not like that boosting is a high variance/low bias
+model (even when additive, ie with tree depth of 1). So if the data is noisy
+then boosting, like other ensemble tree models might not perform well.
+
+To conclude, I will use a CTree, GAM and a boosted ensemble method to ensure a balanced analysis.
+
+# Q2 Method parameters
+
+*Now apply the three methods you selected to the dataset. Beforehand,
+randomly split the dataset into a training (n=1000) and test (n=500)
+dataset. Use your student number to set the seed of the random number
+generator.*
+
+*Motivate your choice of the main model-fitting parameters. Thus, make a
+well-informed choice for a fixed value of each parameter and/or use
+cross-validation to set their values. Your answer should reflect
+understanding of what each parameter does. (Use max. 200-250 words per
+method.)*
+
+```{r}
+# Train test split
+set.seed(3895157)
+
+train <- sample(1:nrow(MH_dat), size = 1000) 
+test <- which(!(1:nrow(MH_dat) %in% train))
+```
+
+## CTree
+
+```{r}
+# Install and load necessary packages
+library(caret)
+library(partykit)
+
+# bonferroni corrected alpha
+alpha <- 0.05
+num_predictors <- ncol(MH_dat_factor) - 1
+bonferroni_corrected_alpha <- 1 - (1 - alpha)^(1/num_predictors)
+
+
+# Define the grid of parameters
+param_grid <- expand.grid(mincriterion = c(1- 0.01, 1- 0.05, 1 - bonferroni_corrected_alpha))
+
+# Define the training control
+ctrl <- trainControl(method = "cv",   # Use cross-validation
+                     number = 10)     # Number of folds (e.g., 10-fold cross-validation)
+
+# Fit the conditional inference tree using train() function
+conditional_tree_model <- train(dep_sev_fu ~ ., 
+                                data = MH_dat_factor[train, ], 
+                                method = "ctree",     # Use conditional inference tree
+                                trControl = ctrl,
+                                tuneGrid = param_grid)     # Specify the training control
+
+
+# Print the model results
+print(conditional_tree_model) # Mincriterion = 0.99
+
+
+```
+
+```{r}
+# Refit final model using Mincriterion = 0.99 for prettier diagram (used in Q3)
+final_ctree <- partykit::ctree(dep_sev_fu ~ ., data = MH_dat_factor[train, ], 
+                               control = ctree_control(mincriterion = 1- 0.01 ))
+```
+
+*(160 words)*
+
+The main model parameter of the conditional inference tree is the chosen
+significance level alpha. It determines the significance level of the
+statistical association test used to select the splitting variable. The
+smaller the significance level, the harder it is for a variable to be
+significant, resulting in tree with fewer terminal nodes.
+
+To fit the conditional inference tree I used 10 fold cross validation.
+The parameter grid only has one parameter which is the significance
+level. I chose three different significance levels alpha: 0.05, 0.01 and
+the Bonferroni corrected significance level. 0.05 and 0.01 are common
+significance levels. I also considered the Bonferroni correction as it
+adjusts for multiple testing. The Root Mean Squared Error (RMSE) was
+used to select the optimal model, because it gives the model performance
+on the same scale as the response variable. All three significance
+levels return similars RMSE values, but the smallest was for alpha =
+0.01 which will be used for the final model.
+
+## GAM
+
+*(200 words)*
+
+```{r}
+# Install and load necessary packages
+library(mgcv)
+
+gam_model = mgcv::gam(dep_sev_fu ~ s(Age) + s(aedu, k=9) + s(IDS) + s(BAI) + s(FQ) + 
+                      s(LCImax) + s(AO) + disType + Sexe + pedigree + alcohol + bTypeDep +
+                     bSocPhob + bGAD + bPanic + bAgo + RemDis + sample + ADuse + PsychTreat, 
+                   data = MH_dat_factor[train, ], method = "REML",
+                   select = T)
+
+summary(gam_model)
+```
+
+```{r}
+# Backwards model selection (AIC based)
+## Start with simplifying fixed effects, then random effects
+
+# Fixed effects
+# Remove bTypeDep
+gam_model_1 = mgcv::gam(dep_sev_fu ~ s(Age) + s(aedu, k=9) + s(IDS) + s(BAI) + s(FQ) + 
+                      s(LCImax) + s(AO) + disType + Sexe + pedigree + alcohol +
+                     bSocPhob + bGAD + bPanic + bAgo + RemDis + sample + ADuse + PsychTreat, 
+                   data = MH_dat_factor[train, ], method = "REML",
+                   select = T)
+
+if (gam_model_1$aic > gam_model$aic) {
+  print("Higher AIC - so new model fits worse")
+  print(paste("gam_model_1$aic: ", gam_model_1$aic))
+  print(paste("gam_model$aic: ", gam_model$aic))
+}
+
+# Ignore "higher AIC" for the sake of building a simpler model and see how the remaining model simplification goes
+summary(gam_model_1)
+```
+
+```{r}
+# Fixed effects
+# Remove RemDis TRUE
+gam_model_2 = mgcv::gam(dep_sev_fu ~ s(Age) + s(aedu, k=9) + s(IDS) + s(BAI) + s(FQ) + 
+                      s(LCImax) + s(AO) + disType + Sexe + pedigree + alcohol +
+                     bSocPhob + bGAD + bPanic + bAgo + sample + ADuse + PsychTreat, 
+                   data = MH_dat_factor[train, ], method = "REML",
+                   select = T)
+
+if (gam_model_2$aic > gam_model_1$aic) {
+  print("Higher AIC - so new model fits worse")
+  print(paste("gam_model_2$aic: ", gam_model_2$aic))
+  print(paste("gam_model$aic: ", gam_model$aic))
+  
+}
+summary(gam_model_2)
+```
+
+```{r}
+# Fixed effects
+# Remove bPanicPositive
+gam_model_3 = mgcv::gam(dep_sev_fu ~ s(Age) + s(aedu, k=9) + s(IDS) + s(BAI) + s(FQ) + 
+                      s(LCImax) + s(AO) + disType + Sexe + pedigree + alcohol +
+                     bSocPhob + bGAD + bAgo + sample + ADuse + PsychTreat, 
+                   data = MH_dat_factor[train, ], method = "REML",
+                   select = T)
+
+if (gam_model_3$aic > gam_model_2$aic) {
+  print("Higher AIC - so new model fits worse")
+  print(paste("gam_model_3$aic: ", gam_model_3$aic))
+  print(paste("gam_model$aic: ", gam_model$aic))
+}
+summary(gam_model_3)
+```
+
+```{r}
+# Fixed effects
+# Remove Sexemale
+gam_model_4 = mgcv::gam(dep_sev_fu ~ s(Age) + s(aedu, k=9) + s(IDS) + s(BAI) + s(FQ) + 
+                      s(LCImax) + s(AO) + disType + pedigree + alcohol +
+                     bSocPhob + bGAD + bAgo + sample + ADuse + PsychTreat, 
+                   data = MH_dat_factor[train, ], method = "REML",
+                   select = T)
+
+if (gam_model_4$aic > gam_model_3$aic) {
+  print("Higher AIC - so new model fits worse")
+  print(paste("gam_model_4$aic: ", gam_model_4$aic))
+  print(paste("gam_model$aic: ", gam_model$aic))
+}
+summary(gam_model_4)
+```
+
+```{r}
+# Fixed effects
+# Remove alcohol No
+gam_model_5 = mgcv::gam(dep_sev_fu ~ s(Age) + s(aedu, k=9) + s(IDS) + s(BAI) + s(FQ) + 
+                      s(LCImax) + s(AO) + disType + pedigree +
+                     bSocPhob + bGAD + bAgo + sample + ADuse + PsychTreat, 
+                   data = MH_dat_factor[train, ], method = "REML",
+                   select = T)
+
+if (gam_model_5$aic > gam_model_4$aic) {
+  print("Higher AIC - so new model fits worse")
+  print(paste("gam_model_5$aic: ", gam_model_5$aic))
+  print(paste("gam_model$aic: ", gam_model$aic))
+}
+summary(gam_model_5)
+```
+
+```{r}
+# Fixed effects
+# Remove pedigree Yes
+gam_model_6 = mgcv::gam(dep_sev_fu ~ s(Age) + s(aedu, k=9) + s(IDS) + s(BAI) + s(FQ) + 
+                      s(LCImax) + s(AO) + disType +
+                     bSocPhob + bGAD + bAgo + sample + ADuse + PsychTreat, 
+                   data = MH_dat_factor[train, ], method = "REML",
+                   select = T)
+
+if (gam_model_6$aic > gam_model_5$aic) {
+  print("Higher AIC - so new model fits worse")
+  print(paste("gam_model_6$aic: ", gam_model_6$aic))
+  print(paste("gam_model$aic: ", gam_model$aic))
+}
+summary(gam_model_6)
+```
+
+```{r}
+# Fixed effects
+# Remove sample
+gam_model_7 = mgcv::gam(dep_sev_fu ~ s(Age) + s(aedu, k=9) + s(IDS) + s(BAI) + s(FQ) + 
+                      s(LCImax) + s(AO) + disType +
+                     bSocPhob + bGAD + bAgo + ADuse + PsychTreat, 
+                   data = MH_dat_factor[train, ], method = "REML",
+                   select = T)
+
+if (gam_model_7$aic > gam_model_6$aic) {
+  print("Higher AIC - so new model fits worse")
+  print(paste("gam_model_7$aic: ", gam_model_7$aic))
+  print(paste("gam_model_6$aic: ", gam_model_6$aic))
+  print(paste("gam_model$aic: ", gam_model$aic))
+}
+summary(gam_model_7)
+```
+
+```{r}
+# Random effects
+# Remove s(aedu)
+gam_model_7_1 = mgcv::gam(dep_sev_fu ~ s(Age) + s(IDS) + s(BAI) + s(FQ) + 
+                      s(LCImax) + s(AO) + disType +
+                     bSocPhob + bGAD + bAgo + ADuse + PsychTreat, 
+                   data = MH_dat_factor[train, ], method = "REML",
+                   select = T)
+
+if (gam_model_7_1$aic > gam_model_7$aic) {
+  print("Higher AIC - so new model fits worse")
+  print(paste("gam_model_7_1$aic: ", gam_model_7_1$aic))
+  print(paste("gam_model$aic: ", gam_model$aic))
+}
+summary(gam_model_7_1)
+```
+
+```{r}
+# Random effects
+# Remove FQ
+gam_model_7_2 = mgcv::gam(dep_sev_fu ~ s(Age) + s(IDS) + s(BAI) + 
+                      s(LCImax) + s(AO) + disType +
+                     bSocPhob + bGAD + bAgo + ADuse + PsychTreat, 
+                   data = MH_dat_factor[train, ], method = "REML",
+                   select = T)
+
+if (gam_model_7_2$aic > gam_model_7_1$aic) {
+  print("Higher AIC - so new model fits worse")
+  print(paste("gam_model_7_2$aic: ", gam_model_7_2$aic))
+  print(paste("gam_model$aic: ", gam_model$aic))
+}
+summary(gam_model_7_2)
+```
+
+```{r, include=T}
+# Save a final gam model for later
+final_gam = gam_model_7_2
+
+# Set up a 2x2 plotting layout
+par(mfrow=c(2,2))
+
+# Check model diagnostics (do not print the text)
+invisible(capture.output(gam.check(final_gam)))
+
+
+# Reset plotting layout to default
+par(mfrow=c(1,1))
+```
+
+The main tuning parameters of the GAM are the type of smoothing function
+and their smoothing coefficient, which allow the GAM to capture
+non-linear relationships. The smoothing coefficient, represented by the
+effective degrees of freedom (edf), controls the degree of smoothing.
+Higher edf means non-linear predictors so higher variance. Lower edf
+result in linear predictors, so less variance.
+
+I used the `mgcv` library to identify the best parameters. It
+automatically selects the smoothing coefficients, but the choice of
+smoothing function must be specified manually. I chose the default thin
+plate regression spline for its ability to capture complex non-linear
+relationships. For boundary stability, natural splines could be an
+alternative.
+
+The model fitting process began with all 20 predictors, using the REML
+estimation method for robust coefficient estimates. To create a
+parsimonious model, I performed backward selection based on AIC values,
+removing one variable at a time. Variables with the highest p-values
+were removed first, simplifying categorical variables (fixed effects)
+first and then numerical ones (random effects). Finally, model diagnostics (plotted
+above) were checked. The final model meets the inference assumptions, as
+confirmed by the normally distributed residuals and presence of homoscedasticity.
+
+```{r, include=T}
+summary(final_gam)
+```
+
+The final GAM model includes 6 categorical and 5 numeric variables, with
+smoothing coefficients indicated by the edf column.
+
+## Boosting
+
+*(250 words)*
+
+```{r, message = F}
+library(gbm)
+library(caret)
+library(purrr)
+
+# Define parameter grid
+param_grid <- expand.grid(
+  n.trees = c(10, 100, 200, 300, 500),        # Number of trees
+  shrinkage = c(0.01, 0.05, 0.1, 0.2),     # Learning rate
+  interaction.depth = c(1, 3, 5, 7),      # Maximum depth of interaction
+  n.minobsinnode = 10  # Keep fixed, was required for CV but don't tune
+)
+
+
+# Perform hyperparameter tuning using cross-validation
+cv_boost_results <- train(dep_sev_fu ~ ., 
+                    data = MH_dat_factor[train, ],
+                    method = "gbm",
+                    trControl = trainControl(method = "cv", number = 10, verbose = F),
+                    tuneGrid = param_grid)
+```
+
+```{r}
+# Save best tuned parameters
+save(cv_boost_results, file = "boosting_best_tune.RData")
+
+best_ntrees = cv_boost_results$bestTune$n.trees
+best_depth = cv_boost_results$bestTune$interaction.depth
+best_shrinkage = cv_boost_results$bestTune$shrinkage
+
+# Fit final boosting model with best tuned parameters
+final_boosted = gbm(
+  dep_sev_fu ~ .,
+  data = MH_dat_factor[train,],
+  distribution = "gaussian",
+  n.trees = best_ntrees,
+  interaction.depth = best_depth,
+  shrinkage = best_shrinkage
+)
+```
+
+Boosting has many parameters that can be tuned. However, I am following
+the advice given during lectures and will limit myself to the following
+three: Total number of trees (B), learning rate $\lambda$ and maximum
+number of terminal nodes per tree.
+
+As previously explained, boosting is an iterative process and the total
+number of trees is the upper limit. Unlike bagging and random forests,
+boosting can overfit if B is too large and underfit if B is too small.
+The learning rate $\lambda$ controls how fast the boosting model learns.
+Small $\lambda$ can require larger B values for the model to converge,
+but usually result in better performance. The maximum number of terminal
+nodes controls if the boosted ensemble is fitting an additive model or
+not. A tree with only two terminal nodes has only one splitting rule, so
+it can be interpreted as a main effect. Any tree with more than one
+splitting rule captures interaction effects via its sequence of nodes
+until the terminal. A boosted ensemble with interaction terms is higher
+variance than an additive boosted ensemble.
+
+To identify the best model parameters I used 10 fold cross validation
+(CV) on the training set.
+
+Here are my final boosting parameters. The parameter `n.minobsinnode`
+had to be included for the CV function to work but was kept fixed at its
+default value and can be ignored.
+
+```{r, include=T}
+# Best tuned results
+print(cv_boost_results$bestTune, row.names = F )
+```
+
+```{r, include = T}
+library(ggplot2)
+library(dplyr)
+
+# Filter and select necessary columns
+plot_data <- cv_boost_results$results %>%
+  filter(interaction.depth == best_depth ) %>%
+  select(shrinkage, n.trees, RMSE)
+
+# Square the RMSE values
+plot_data <- plot_data %>% mutate(RMSE_squared = RMSE^2)
+
+# Plotting
+ggplot(plot_data, aes(x = n.trees, y = RMSE_squared, group = shrinkage, color = factor(shrinkage))) +
+  geom_line() +
+  labs(title = "Boosting: CV Tuning Results", x = "Number of Trees", y = "MSE", subtitle = "Visualization with all parameters fixed except n.tree and learning rate") +
+  scale_color_discrete(name = "Learning Rate") +
+  theme_minimal()
+```
+
+This plot visualizes how smaller learning rates tend to
+perform better but require more trees, indicating their trade off
+relationship.
+
+# Q3 Results & predictors
+
+*Provide an interpretation of each of the resulting models: Describe
+which variables are most important in determining the value of the
+outcome variable, and which measure(s) you used to determine their
+relative importance. Describe the effect of the most important variables
+(e.g., describe the shape and direction of the effect on the outcome
+and/or provide and discuss plots of the variables’ effects) for each
+method.(Use max. 150-200 words per method.)*
+
+## CTree
+
+*(200 words)*
+
+```{r, include = T, fig.width=7}
+plot(final_ctree, gp = gpar(fontsize = 7), type = "simple")
+```
+
+Based on the above conditional inference tree, we can see that the
+following three variables are the most important in determining the
+response variable:
+
+1.  Inventory of Depressive Symptomatology (IDS) score of the patient
+
+2.  The patients type of disorder (disType)
+
+3.  Their age at onset of the disorder (AO)
+
+The patients IDS score is the most important variable as it sits at the root node. Then the
+disorder type which is the second node and finally the onset age.
+
+The importance of these variables is inherent to the conditional inference tree's structure. It is computed via statistical association tests conducted at each split, meaning that variables closer to the root have a stronger effect on the response variable.
+
+The model can be interpreted as follows. Patients with an IDS score of 9 points or lower, with an onset age of older than 14, will have the lowest depressive symptoms at 12 months post study begin. Their response variable is expected to be 10.6 points. The highest expected response is 19.3 points which is expected by patients with an IDS score of higher than 16 who have comorbid (both anxiety and depressive) disorder. Notably, the model splits the disorder type into comorbid versus single-disorder (either anxiety or depressive) categories.
+
+
+## GAM
+
+*(200 words)*
+
+```{r, include=T}
+summary(final_gam)
+```
+
+
+For the GAM, we identify the most important predictors by examining p-values. T-tests for categorical variables and F-tests for numerical variables. A smaller p-value indicates higher importance.
+
+For categorical variables, the type of disorder is most important, followed by anti-depressant use. With anxiety as the reference, having comorbid disorder increases the response by 1.65 points, while depressive disorder increases it by 1.6 points. Anti-depressant use improves the outcome by decreasing the response by 1.35 points. Categorical variables shift the regression intercept but do not affect the slope.
+
+Among numerical variables, the patient's IDS score is most significant, followed by onset age and then "time with disorder symptoms" (LCImax). A 5-point increase in IDS score leads approximately to a 2-point increase in the response, indicating a direct linear slope. Conversely, a 10-year increase in onset age reduces the response by approximately 1 point, suggesting an inverse linear slope. Boundary behavior is ignored as it is less reliable. All other variables are held fixed when examining slopes.
+
+The plots illustrate these conditional effects with 95% confidence intervals, showing the variable direction within their interquartile ranges. Conditional effects allows for negative values even though the response variable is non-negative.
+
+
+
+```{r, fig.width=8, include = T}
+# Set up the plotting layout
+par(mfrow=c(2,3))
+
+# Plot main effects
+plot(final_gam)
+
+
+# Reset plotting layout to default
+par(mfrow=c(1,1))
+```
+
+## Boosting
+
+*(200 words)*
+
+```{r, include = T, fig.width=8}
+summary_boosting = summary(
+  final_boosted,
+  cex.names = .6,
+  las = 2,
+  cBars = 15,
+  cex.lab = .75,
+  cex.axis = .75,
+  method = permutation.test.gbm
+)
+```
+
+
+Boosting ensembles cannot be directly interpreted like GAMs or single trees. However, their variables can be ranked by importance. The above plot shows each variable's relative influence in reducing the model's loss function, measured using a permutation test on the full training set. This test estimates importance by shuffling features and measuring the increase in prediction error.
+
+Similarly to the previous two methods, the most important variable is the IDS score, followed by the onset age, then disorder type. The "time with disorder symptoms" (LCImax) variable can be considered the best of the (unimportant) rest. 
+
+Partial dependence plots (PDPs) visualize the effects of the most important variables, showing the effect of a single predictor averaged over all other predictors The y-axis is on the original scale as the response variable. IDS shows a linear trend with a 10 point IDS increase leading to roughly a 2 point increase in the response. Onset age shows an inverse linear trend with a 10 year increase in onset age resulting in approximately a 1 point decrease in the response. The disorder type is categorical and comorbid disorder has the highest response value, so the worst outcome. LCImax shows a linear trend with a flatter slope, indicating a less pronounced effect.
+
+```{r, include = T, fig.width=8, message=F}
+library(gridExtra)
+
+# Individual plots
+g1 = plot(final_boosted, i.var = "IDS")
+g2 = plot(final_boosted, i.var = "AO", add = F)
+g3 = plot(final_boosted, i.var = "disType")
+g4 = plot(final_boosted, i.var = "LCImax", add = F)
+
+# Arrange the plots in a 2x2 grid
+grid.arrange(g1, g2, g4, nrow = 2, ncol = 2)
+```
+
+```{r, include = T, fig.width=5, fig.height=2}
+# Display seperatly to avoid label overlap
+g3
+```
+
+
+
+# Q4 Predictive accuracy
+
+*Assess and compare the predictive accuracy of each of the models using
+the test set. Which model predicts best? Bonus: Using a suitable
+approach, compute confidence intervals for the (pairwise differences in)
+predictive performance (not taught during the lectures). (Use max. 100
+words, max. 200 words including bonus.)*
+
+## CTree
+
+```{r, include=T}
+# Predictions on test set
+y_hat_ctree <- predict(final_ctree, newdata = MH_dat_factor[test, ])
+
+# Compute MSE
+mse_ctree <- mean((MH_dat[test, "dep_sev_fu"] - y_hat_ctree)^2)
+print(paste("Ctree: Test set MSE is ", round(mse_ctree, 4), " and RMSE is ", round(sqrt(mse_ctree), 4) ))
+```
+
+## GAM
+
+```{r, include=T}
+# Prediction on test set
+y_hat_gam <- predict(final_gam, newdata = MH_dat_factor[test, ])
+
+# Compute MSE
+mse_gam <- mean((MH_dat_factor[test, "dep_sev_fu"] - y_hat_gam)^2)
+print(paste("GAM: Test set MSE is ", round(mse_gam, 4), " and RMSE is", round(sqrt(mse_gam), 4) ))
+```
+
+## Boosting
+
+```{r, include=T, message = F}
+# Prediction on test set
+y_hat_boosting <- predict(final_boosted, newdata = MH_dat_factor[test, ])
+
+# Compute MSE
+mse_boosting <- mean((MH_dat_factor[test, "dep_sev_fu"] - y_hat_boosting)^2)
+print(paste("Boosting: Test set MSE is ", round(mse_boosting, 4), " and RMSE is ", round(sqrt(mse_boosting), 4 ) ))
+```
+
+## Evaluation
+
+*(50 words)*
+
+As shown above, the boosting ensemble has the lowest test set MSE, indicating the highest predictive accuracy. It is thus the best predicting model, closely followed by GAM. CTree exhibits the poorest performance. Boosting and GAM have similar accuracies (rounded RMSE of 4.4), while CTree lags significantly.
+
+
+## Bonus Evaluation
+
+*(150 words)*
+
+
+```{r}
+# Load data for pairwise difference - has been computed in seperate file to save time when knitting this report
+load("MC_mean_MSE_with_CI.RData")
+load("MC_pairwise_difference.RData")
+```
+
+
+
+The pairwise difference in predictive performance with 95% confidence interval is given below:
+
+```{r, include=T}
+# Pairwise difference of the methods with 95% confidence interval
+results_df
+```
+
+To compute this, I locked the test away only considered the training set, call it MC set. I repeatedly fitted the three models on a randomly generated training subset of the MC set. The three models used the best tuned parameters identified in Q2. By fitting the best tuned models on the same subset I ensure that the models are comparable. I then evaluated their MSE based on the training subset of the MC set. This process was repeated 1000 times, and empirical percentiles were used to compute confidence intervals.
+
+```{r, include=T}
+# 3 methods with their estimated test set MSE with 95% confidence interval
+mean_results_df
+```
+
+Based on this simulation, the on average best performing model is now the GAM instead of boosting. However, since their difference in accuracy is not significant either model can be seen as the "best predicting" model depending on the problem context. The CTree is consistently inferior. All test set MSE's fall inside the empirical confidence intervals.
+
+
+# Q5 Conclusion on predictors
+
+*Based on 3 and 4: Provide a short overall conclusion regarding which
+predictors are related to the outcome. (Use max. 100 words.)*
+
+*(100 words)*
+
+Based on question 3, all three models agree that a patient's IDS score is the most important predictor. Both the CTree and the boosting ensemble agree that onset age is the second most important predictor, followed by the disorder type. The GAM does not clearly rank between onset age (numerical) and disorder type (categorical) but includes both among the top predictors.
+
+Based on question 4, we know that boosting and the GAM perform significantly better than the CTree, partially explained by including additional variables. Thus, the "time with disorder symptoms" (LCImax) variable can *potentially* be considered the fourth most important predictor. All other variables seem unimportant.
+
+
+# Q6 Individual prediction
+
+*A psychologist has seen David Edgar Pression for an intake today. The
+psychologist wonders whether they should refer David to an intensive
+depression treatment program.*
+
+*The psychologist asks you to provide them with an estimate of the
+severity of David’s depressive symptoms in 12 months. Patients with
+predicted depressive symptom severity equal to or greater than 17 are
+referred to the intensive treatment program. What is your estimate?
+Should David be referred to the intensive treatment program? Bonus:
+Using a suitable approach, quantify the uncertainty of your estimate
+(not specifically taught during the lectures). (Use max. 100 words, max.
+200 words including bonus.)*
+
+
+
+## CTree
+
+```{r}
+# Read the patient data
+pat_dat <- read.table("Patient.csv", sep = ",", header = TRUE,
+ stringsAsFactors = TRUE) 
+
+pat_dat_factor = pat_dat |> mutate_if(is.logical, factor)
+
+# View
+pat_dat_factor
+str(pat_dat_factor)
+```
+
+```{r}
+# Update the factor levels to match the full data set's levels
+for (col in names(pat_dat_factor)) {
+  if (is.factor(pat_dat_factor[[col]])) {
+    # Update factor levels to match MH_dat_factor
+    pat_dat_factor[[col]] = factor(pat_dat_factor[[col]],
+                                   levels = levels(MH_dat_factor[[col]]))
+  }
+}
+
+
+str(pat_dat_factor)
+```
+
+```{r, include=T}
+# CTree prediction, new patient
+y_patient_ctree = predict(final_ctree, newdata = pat_dat_factor )
+
+print(paste("Ctree: David's predicted depressive symptoms severity in 12 months is ", round(unname(y_patient_ctree), 4 ) ) )
+```
+
+## GAM
+
+```{r, include = T}
+# GAM: Perform prediction with confidence interval
+prediction_with_interval <- predict(final_gam, newdata = pat_dat_factor, se.fit = TRUE, interval = "confidence", level = 0.95)
+
+# Extract the prediction and confidence interval
+predicted_value <- prediction_with_interval$fit
+lower_confidence_bound <- prediction_with_interval$fit - 1.96 * prediction_with_interval$se.fit
+upper_confidence_bound <- prediction_with_interval$fit + 1.96 * prediction_with_interval$se.fit
+
+# Display the results
+cat("GAM: David's predicted depressive symptoms severity in 12 months is ", round(predicted_value, 4) , "\n")
+cat("With 95% Confidence Interval: [", round(lower_confidence_bound, 4), ", ", round(upper_confidence_bound, 4), "]\n")
+```
+
+
+## Boosting
+
+```{r, message=F, include=T}
+# Boosting prediction, new patient
+y_patient_boosting = predict(final_boosted, newdata = pat_dat_factor )
+
+print(paste("Boosting: David's predicted depressive symptoms severity in 12 months is ", round(unname(y_patient_boosting), 4 ) ) )
+```
+
+## Evaluation
+
+*(200 words)*
+
+As shown above the three models results in three different estimates, even when rounded to the nearest integer. From question 4 we know that the CTree on average predicts significantly worse than both other models. Thus, I will ignore the CTree prediction. Surprisingly, the ensemble and the GAM return contradicting predictions, differing by more than 2 points on the response variable scale.
+
+Examining the top three numerical predictors reveals that the top two (IDS score and onset age) are on the boundary of their variable space. This might explain the discrepancy between GAM and boosting as predictions are least stable at the boundaries.
+
+
+```{r, include=T}
+# Compute the quantile of pat_dat_factor$IDS within MH_dat_factor[train, "IDS"]
+quantile_value <- ecdf(MH_dat_factor[train, "IDS"])(pat_dat_factor$IDS)
+
+# Display the quantile value
+cat("David's Inventory of Depressive Symptomatology (IDS) score\n is in the", round(quantile_value * 100, 2), "th percentile of all data points in the training set")
+```
+
+```{r, include=T}
+quantile_value <- ecdf(MH_dat_factor[train, "AO"])(pat_dat_factor$AO)
+
+# Display the quantile value
+cat("David's Age at onset (AO)\n is in the", round(quantile_value * 100, 2), "th percentile of all data points in the training set")
+```
+
+```{r, include=T}
+quantile_value <- ecdf(MH_dat_factor[train, "LCImax"])(pat_dat_factor$LCImax)
+
+# Display the quantile value
+cat("David's Percentage of time in which symptoms of anxiety\n and/or depressive disorders were present during the past four years\n (LCImax) score is in the", round(quantile_value * 100, 2), "th percentile of all data points in the training set")
+```
+
+
+
+As opposed to tree based models, the GAM is likelihood based. We also know from the model diagnostics in Q2 that the GAM meets the inference assumptions. Thus, the GAM can quantify the uncertainty around its predictions via standard error calculations. Q4 indicates that the GAM's predictive performance is on par with the boosting ensemble model, while being more interpretable and allowing for inference. Thus, I will select the GAM's estimate.
+
+My final estimate for David's depressive symptoms is 18.6141. Since the 95% confidence interval (17.4355, 19.7927) is above the threshold value of 17, David should be referred to the intensive treatment program. 

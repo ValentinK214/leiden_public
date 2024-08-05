@@ -1,0 +1,1235 @@
+---
+title: "Assignment 1"
+author: "Valentin Kodderitzsch 3895157"
+date: "2024-04-09"
+output: pdf_document
+urlcolor: blue
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F)
+knitr::opts_chunk$set(include = F)
+```
+
+<!-- # Analysing the data generating function -->
+
+```{r}
+# Set working directory
+setwd("/Users/valentinkodderitzsch/Coding/r-for-stats/semester_2/statistical_learning/Assignments_graded/assignment_1")
+
+GenerateDataSDS <- function(seed) {
+  set.seed(seed) # 10^4 cases
+  nCases <- 10^4
+  nNoiseVar <- 200
+
+  # generate X
+  x1 <- runif(nCases, -2, 2)
+  x2 <- rnorm(nCases, mean = 4, sd = sqrt(2))
+  x3 <- rnorm(nCases, mean = 0, sd = 1)
+  xnoise <- matrix(runif(nCases * nNoiseVar, -2, 2), nCases, nNoiseVar)
+
+  # generate Y
+  eta <- -1.5 + (1.5 * x1) + (0.85 * x1^2) - (0.20 * x1^3) + (2.5 * I(x2 < 0)) + I(x2 > 3) + (0.3 * x3)
+  pi <- exp(eta) / (1 + exp(eta))
+  y <- rbinom(nCases, 1, pi)
+
+  # combine data and split into training and test data
+  full <- data.frame(y, eta, pi, x1, x2, x3, xnoise)
+  names(full) <- c("Y", "Eta", "Pi", paste("X", 1:(nNoiseVar + 3), sep = ""))
+
+  return(full)
+}
+```
+
+<!-- The seed number is the student ID. The full matrix has 10^4 rows, and 203 x variables and 1 y variable. The first 3 x variables represent information relevant to Y. The other 200 variables are just noise. The indicator function `I` evaluates the expression to a vector of 0s and 1s. -->
+
+<!-- Eta is an unbounded, Real number. It is constructed using cubic terms, so it is a polynomial of degree 3. It also includes the 0, 1 indicator leading to discontinuities or steps. Thus, eta is a non-linear, non-continious function of x1 to x3. -->
+
+<!-- Y is generated using a reverse logistic regression approach. For this, pi (bounded between 0 and 1) is constructed from eta (unbounded) using the inverse logit function. Then pi is used to sample from a binomial distribution. Said binomial sample is Y where Y is a vector of 0s and 1s. So Y represents 2 classes. Pi values can be deterministically computed from X1 to X3, however, Y cannot be computed deterministically from pi. Thus, randomly sampling from the binomial is equivalent to introducing an irredusible error. -->
+
+```{r}
+df = GenerateDataSDS(3895157)
+
+tmp = df
+tmp$color = ifelse(df$Y == 1, "black", "red")
+
+# Check if pi is an indicator for Y classes
+tmp$y_hat = ifelse(df$Pi > 0.5, 1, 0)
+
+ys = tmp$Y
+y_hat = tmp$y_hat
+table(ys, y_hat)
+```
+
+<!-- From the above table we observe that pi is not a good indicator for the Y class. But it does hold that the higher pi, the more likely Y = 1. -->
+
+<!-- Let's investigate the decision boundary. My intuition is that if the boundary is linear then we should use logistic regression. -->
+
+```{r}
+mean(df$Y)
+```
+
+<!-- So about roughly half of all labels are 1. -->
+
+```{r}
+library(rgl)
+
+# Sample some data points so that it is easier to plot
+#ids = sample(1:nrow(df), 10^3)
+ids = 1:(nrow(df)/2)
+#ids = (nrow(df)/2):nrow(df)
+
+x1_3d = tmp$X1[ids]
+x2_3d = tmp$X2[ids]
+x3_3d = tmp$X3[ids]
+col_3d = tmp$color[ids]
+
+plot3d(x = x1_3d, y = x2_3d, z = x3_3d,
+       col = col_3d,
+       type = 's', radius = 0.1)
+
+rglwidget()
+```
+
+<!-- Create 3 plots to investigate the decision boundary statically. -->
+
+```{r}
+par(mfrow = c(1, 3)) 
+
+plot(x1_3d, x2_3d, col = col_3d)
+plot(x1_3d, x3_3d, col = col_3d,)
+plot(x2_3d, x3_3d, col = col_3d)
+```
+
+<!-- Observation: -->
+
+<!-- -   In the given feature space there seems to be a somewhat linear decision boundary (plane) -->
+
+<!-- -   For the standard x1, x2 grid there is a line and if we flip by 90 degrees the boundary still exists in the x1, x3 grid -->
+
+# A1
+
+```{r}
+# Load the dataset for the actual analysis
+data_set <- read.csv("Data3895157.csv")
+train <- data_set[1:5000, ]
+test <- data_set[5001:10000, ]
+```
+
+```{r, echo=F}
+# Plot a histogram of Y, X1 to X6
+apply(train[1:7], 2, hist) 
+```
+
+From the data generating function we know that only X1 to X3 are
+relevant to create the binary class label Y. The following two figures
+illustrate the decision boundary in 3D for X1 to X3 only, selected from
+the training set.
+
+```{r, include=T, fig.align='left', warning=F}
+plot3d(x = x1_3d, y = x2_3d, z = x3_3d,
+       xlab = "X1", ylab = "X2", zlab = "X3",
+       col = col_3d,
+       type = 's', radius = 0.1)
+
+rglwidget()
+```
+
+```{r, include = T, fig.align='default'}
+par(mfrow = c(1, 3))
+plot(x1_3d, x2_3d, col = col_3d, xlab = "X1", ylab = "X2")
+plot(x1_3d, x3_3d, col = col_3d, xlab = "X1", ylab = "X3")
+plot(x2_3d, x3_3d, col = col_3d, xlab = "X2", ylab = "X3")
+#text(0.5, 0.5, "2D view of X1 vs X2 vs X3", cex=2, font=2)
+mtext("My 'Title' in a strange place", side = 3, line = 100, outer = TRUE)
+
+```
+
+We can observe a somewhat linear decision plane/boundary with class 0
+towards the center and class 1 at the edge of the parameter space. There
+is no perfect separation between the two classes which could be
+explained by $\eta$ (found in the data generating function) which is
+non-linear and has discontinuities due to the indicator function.
+
+When discussing the expected prediction error (EPE) between K-nearest
+neighbors (KNN) analysis versus LASSO logistic regression (LLR), we need
+to take both the dimensionality of the predictors and the decision
+boundary into consideration. However, let's first investigate the KNN
+and LLR model assumptions.
+
+KNN is a non-parametric model and thus has low bias & high variance. It
+makes no assumption about the decision boundary and can capture it in
+both non-linear and linear ways. LRR is a parametric model and is the
+discriminative counterpart to LDA when ignoring the LASSO penalty and
+therefore assumes a linear decision boundary. When considering the LASSO
+penalty also, then LRR is (very) high bias & low variance compared to
+KNN.
+
+In the end, I expect KNN to have only marginally lower/better EPE
+compared to LRR, assuming 0-1 loss. Reason being that KNN can easily fit
+the "imperfections" of the decision plane without suffering from the
+curse of high dimensionality (further explained in A2). LRR is more
+bias/stringent about the linearity of the decision boundary. However, as
+we only 6 predictors, lots of observations (5000) and a somewhat linear
+decision plane I expect both KNN and LRR to perform similarly.
+
+# A2
+
+In the second scenario we consider all 203 predictors. X1 to X3 explain
+Y, whereas X4 to X203 are just noise. It is important to know that X1 as
+well as all noise variables (X4-X203) are drawn from a uniform
+$U(-2, 2)$. Thus, any model might have difficulties discriminating
+between X1 and noise. X2 and X3 are drawn from a normal distribution so
+it should be more easily distinguishable.
+
+In this 203 predictive variable scenario I expect KNN to perform much
+worse than LRR. Reason being that with 203 predictors and 5000
+observations, KNN will suffer the curse of dimensionality. In other
+words, all observations will be far apart (using the Euclidean distance
+measure) in high dimensional space. Determining the class label based on
+the nearest "neighbor" will not work anymore as all "neighbors" are
+similarly far away (and none are close by) undermining the meaning of
+classification by proximity. As such, KNN in scenario A2 will just learn
+the noise and will not be able to generalize well on the test set.
+
+On the other hand, LRR will do a good job cutting down the number of
+predictors from 203 to a sensible number capturing mostly the signal. If
+X1 will be in the predictors remains to be seen, as X1 is drawn from the
+same distribution as the noise. In any case, LRR will do a better job at
+generalizing on the test set as it is high bias compared to KNN.
+
+# A3
+
+Consider only Y and predictors X1 to X6.
+
+## a)
+
+Let's fit KNN with 10 fold cross validation on the training set. As
+previously mentioned we have 5000 observations and 6 predictive
+variables for a binary classification problem. Thus, all k's in the
+parameter grid should be odd numbers. A small k for KNN will result in
+low bias & high variance compared to a large k (leads to high bias & low
+variance). The tuning grid was constructed using the "1 to $\sqrt(n)$"
+[heurisitc](https://stats.stackexchange.com/questions/534999/why-is-k-sqrtn-a-good-solution-of-the-number-of-neighbors-to-consider)
+plus a couple of higher k values.
+
+```{r, include = T, message=F}
+library(caret)
+library(ggplot2)
+library(lattice)
+
+# Set the seed number again - keep for the rest of the doc
+set.seed(3895157)
+
+# Encode Y as factor
+train$Y = as.factor(train$Y)
+test$Y = as.factor(test$Y)
+
+# Define the training control as 10 fold CV
+train_control = trainControl(method = "cv", number = 10)
+
+# Define the tuning grid for k
+k_grid = data.frame(k = c(1, 3, 5, 7, 9, 11, 15, 21, 31, 45, 65, 151, 371)) 
+
+knn_model_6 = train(Y ~ X1 + X2 + X3 + X4 + X5 + X6,
+                  data = train,
+                  method = "knn",
+                  tuneGrid = k_grid,
+                  trControl = train_control,
+                  preProcess = c("center", "scale") )
+
+# Print the optimal k and corresponding accuracy
+print(knn_model_6)
+```
+
+We observe an increase-max-decrease shape for the accuracy (0-1 loss) as
+k increases. The optimal/max k is k = 31 as obtained by 10 fold cross
+validation on the training set with X1 to X6 predictors.
+
+Now compute the EPE on the test set with k = 31. The test set can only
+be used once as it will otherwise be part of the model building
+procedure which would violate the philosophy of correct model
+performance estimation.
+
+```{r, include = T}
+# Make predictions on the test set
+predictions = predict(knn_model_6, newdata = test)
+
+# Compute prediction accuracy using 0-1 loss
+acc_knn_6pred = mean(predictions == test$Y)
+print(paste0("KNN test set accuracy for k=31 is ", acc_knn_6pred, " with EPE of ", 1- acc_knn_6pred))
+```
+
+## b)
+
+Now find the optimal $\lambda$ for LRR using 10 fold cross validation on
+the training set. To this end, use the `glmnet` package and set
+$\alpha=1$ for the LASSO penalty.
+
+```{r, include=T}
+library(glmnet)
+
+# Fit the LRR, alpha = 1 specifies LASSO
+# Specify 10 folds for CV
+llr_6 = cv.glmnet(x = as.matrix(train[2:7]), y = train$Y,
+                  alpha = 1, family = "binomial", nfold = 10)
+
+# Show LRR output
+llr_6
+
+# Plot number of predictors, lambda, deviance
+plot(llr_6)
+
+coef(llr_6)
+```
+
+We observe that even though the 1 standard error (1SE) $\lambda$ value
+has a slightly higher binomial deviance (i.e. slightly worse fit), it
+correctly shrinks all noise variables X4 to X6 to zero.
+
+Since we know from the set up of this exercise that only X1 to X3 are
+relevant, I will proceed my analysis with $\lambda=0.030797$ chosen by
+the 1SE criterion instead of the minimum binomial deviance criterion.
+
+Now compute the EPE on the test set with $\lambda = 0.030797$ (1SE).
+
+```{r, include=T}
+predictions_lrr_6 = predict(llr_6, newx = as.matrix(test[2:7]),
+                            type = "response", s = "lambda.1se")
+
+y_hat_lrr_6 = ifelse(predictions_lrr_6 > 0.5, 1, 0)
+
+acc_lrr_6 = mean(y_hat_lrr_6 == test$Y)
+
+print(paste0("LRR (6 predictors) test set accuracy for 1SE lambda=", round(llr_6$lambda.1se, 4), " is ", acc_lrr_6, " with EPE of ", 1 - acc_lrr_6))
+```
+
+## c)
+
+On X1 to X6 we observe the following EPEs, **KNN: 0.2896** and **LRR:
+0.346**.
+
+Compared to my initial explanation from question A1, these estimates
+were mostly expected. As correctly predicted in question A1, KNN has a
+lower EPE compared to LRR. However, contrary to my initial analysis,
+KNN's EPE is a good amount (almost 6% points) lower than LRR's, instead
+of just being "marginally" lower.
+
+This can be explained by the non-parametric nature of KNN which makes
+the model low bias & high variance compared to LRR. I believe that I
+have over-emphasized the "linearity" of the decision boundary when
+analyzing it in question A1. As such, I believed that both LRR and KNN
+should share a fairly similar, "linear" decision boundary. However, in
+the low dimensional scenario (X1 to X6 predictors) KNN was able to pick
+up the non-linearities of the decision boundary leading to a noticeably
+lower EPE compared to LRR.
+
+Interestingly enough, LRR was able to correctly penalize all noise
+variables X4 to X6. So I under-emphasized LASSO's abilities to filter
+out the noise correctly. As such, LRR with the 1SE $\lambda$ is very
+high bias & low variance compared to KNN, as it always picks up the
+relevant predictors X1 to X3, whilst assuming a linear decision
+boundary.
+
+# A4
+
+Consider Y and all predictors X1 to X203.
+
+## a)
+
+Follow the same procedure as described in A3a). Only difference is that
+the data set has all 203 predictors now.
+
+```{r, include = T}
+knn_model_203 = train(Y ~ .,
+                  data = train,
+                  method = "knn",
+                  tuneGrid = k_grid,
+                  trControl = train_control,
+                  preProcess = c("center", "scale") )
+
+# Print the optimal k and corresponding accuracy
+print(knn_model_203)
+```
+
+Similar observation as A3a). We observe an increase-max-decrease shape
+for the accuracy (0-1 loss) as k increases. The optimal/max k is k = 151
+as obtained by 10 fold cross validation on the training set with 203
+predictors.
+
+Now compute the EPE with k = `r knn_model_203$bestTune` on the test set.
+
+```{r, include = T}
+# Make predictions on the test set
+pred_knn_203 = predict(knn_model_203, newdata = test)
+
+# Compute prediction accuracy using 0-1 loss
+acc_knn_203 = mean(pred_knn_203 == test$Y)
+print(paste0("KNN test set accuracy for k=", knn_model_203$bestTune, " is ", acc_knn_203, " with EPE of ", 1 - acc_knn_203))
+```
+
+Note that KNN with k=65 (instead of k=151) will likely perform similarly
+on the test data and it would be less computationally expensive. But I
+wil move forward with k=151 as this was selected by the model building
+procedure.
+
+## b)
+
+```{r, include = T}
+# Fit the LRR, alpha = 1 specifies LASSO
+# Specify 10 folds for CV
+llr_203 = cv.glmnet(x = as.matrix(train[-1]), y = train$Y,
+                  alpha = 1, family = "binomial", nfold = 10)
+
+# Show LRR output
+llr_203
+
+# Plot number of predictors, lambda, deviance
+plot(llr_203)
+```
+
+```{r}
+coef(llr_203)
+```
+
+Now compute the EPE on the test set with $\lambda$ =
+`r llr_203$lambda.1se` (1SE).
+
+```{r, include = T}
+predictions_lrr_203 = predict(llr_203, newx = as.matrix(test[-1]),
+                            type = "response", s = "lambda.1se")
+
+y_hat_lrr_203 = ifelse(predictions_lrr_203 > 0.5, 1, 0)
+
+acc_lrr_203 = mean(y_hat_lrr_203 == test$Y)
+
+print(paste0("LRR (203 predictors) test set accuracy for 1SE lambda=", round(llr_203$lambda.1se, 4), " is ", acc_lrr_203, " with EPE of ", 1 - acc_lrr_203))
+```
+
+## c)
+
+On X1 to X203 we observe the following EPEs, **KNN: 0.4312** and **LRR:
+0.3424**.
+
+Compared to my explanation for question A2, these answers were expected.
+KNN performed significantly (almost 9% points) worse compared to LRR.
+
+As previously explained in A2, KNN suffered from the curse of
+dimensionality. With 203 predictors classification by proximity will not
+work anymore, as all "neighbors" are similarly far away. Thus, proximity
+starts to become meaningless and KNN will not be able to properly
+distinguish between the signal and noise. This explains the EPE of
+0.4312, which is the same as saying that KNN has a missclassification
+rate of 2 in 5. So not that good model performance.
+
+LRR on the other hand, was able to correctly shrink all noise predictors
+to zero when using the 1SE criterion for $\lambda$ on the test set. I
+did expect LRR to significantly cut down the noise in the predictors.
+But LRR exceeded my expectation in how well it did so as it correctly
+identified relevant predictors only. This is reflected in LRR's EPE of
+0.3424 which is significantly better compared to KNN. This was correctly
+explained in A2.
+
+Now let's compare KNN and LRR individually for the case with few
+predictors versus many predictors.
+
+KNN in the 6 predictor case has an EPE of 0.2896, and then an EPE of
+0.431 in the 203 predictor case. As previously explained this was
+expected as KNN is a non-parametric, low bias & high variance model,
+that suffers from the curse of dimensionality. Thus, KNN generalizes
+well in the case of few explanatory variables but has poor model
+performance when the number of predictors is high.
+
+LRR has an EPE of 0.346 in the 6 predictor case and an EPE of 0.3424 in
+the 203 predictor case. I expected LRR to perform similarly in both
+cases. However, I did not expect LRR to have such a closely matching EPE
+in both cases. This could be explained by the 1SE criterion for
+$\lambda$ which correctly identifies the relevant predictors in both
+cases. As such both LRR models are nearly identical in both cases
+resulting in closely matching EPE values. This further shows that LRR
+with the 1SE criterion for $\lambda$ is a high bias & low variance model
+that performs well on the given dataset.
+
+# B0 Load data
+
+```{r}
+df_B = read.csv("data.US.csv")
+
+head(df_B)
+summary(df_B)
+```
+
+Load the data. We observe that all variables have already been
+standardized, as mentioned in the assignment.
+
+```{r}
+# These are all the variable names as mentioned in the assignment
+var_B_names = c("anxiety", "angry hostility", "depression", "selfconsciousness", 
+                "impulsiveness", "vulnerability", "warmth", "gregariousness", "assertiveness", "activity", 
+                "excitement-seeking", "positive emotions", "fantasy", "aesthetics", "feelings", "ideas", "actions",
+                "values", "trust", "straightforwardness", "altruism", "compliance", "modesty", "tendermindedness", 
+                "competence", "order", "dutifulness", "achievement striving", "self-discipline", "deliberation")
+
+# Check that we have 30 names
+length(var_B_names)
+
+# Remove the ID column
+df_B = df_B[-1]
+
+# Replace V2 to V31 with the actual names
+names(df_B) = var_B_names
+
+# Show the new dataframe
+head(df_B)
+```
+
+Plot the correlation.
+
+```{r, include=T, message = F}
+library(corrplot)
+corr.matrix = cor(df_B)
+
+corrplot(corr.matrix, method = "square", type = "upper", tl.cex = 0.7, tl.srt = 45)
+```
+
+As mentioned in the assignment many variables are highly correlated.
+
+# B1
+
+Q: Do you think that reducing the variables to a smaller set of
+(new/derived) variables may be a good idea? Which statistical technique
+can be used to achieve such a dimension reduction? Explain why this
+technique is appropriate.
+
+Reducing the variables to a smaller set of potentially new variables may
+be a good idea because:
+
+-   30 variables are more difficult to interpret and keep an overview of
+    compared to 5 or 6 variables
+
+-   Some of the 30 variables are highly correlated, e.g. anxiety,
+    depression, vulnerability, so there is some redundancy
+
+-   Compressing redundant variables into new variables might lead to a
+    small loss of information but it will help identify the "big picture
+    personality traits", ie underlying structure in the data, rather
+    than getting lost in the details
+
+Principle component analysis (PCA) can be used to achieve such a
+dimension reduction.
+
+PCA is appropriate because:
+
+-   It summarized the variance of the data set using a smaller number of
+    variables/components
+
+-   All new variables are uncorrelated
+
+-   The top PCs can potentially capture the majority of the variance,
+    leading to minimal information loss whilst reducing the
+    dimensionality of the data set
+
+PCA works by creating new components which are linear combinations of
+the original variables. Said linear combinations can be difficult to
+interpret if the loadings are not rotated. But for the sole purpose of
+reducing the dimensionality of the personalities data set, PCA is an
+appropriate technique.
+
+```{r}
+# No need to scale as the data is already scaled
+pr.out <- prcomp(df_B, scale = F)
+
+pr.out
+```
+
+# B2
+
+Q: How many new/derived variables should be computed to capture the most
+important part of the information in the original variables? Use at
+least four different methods to select the number of new/derived
+variables. Explain each method and thoroughly justify your final
+decision (e.g., by providing relevant figures).
+
+To summarise, I will use the top 5 principle components (PCs), i.e. 5
+new variables instead of 30, to capture the most important information
+of the given dataset. I will justify my decision making in detail at the
+end of B2.
+
+To identify the top PCs I used the following rules:
+
+1.  Kaiser's rule (a simple rule for an upper bound)
+
+2.  Cattell's scree plot (a simple rule for a lower bound)
+
+3.  Horn's parallel analysis (to account for sampling fluctuations - a
+    more complex/sophisticated rule)
+
+4.  MAP (to account for a correlated dataset - a more
+    complex/sophisticated rule)
+
+## Kaiser's rule
+
+Choose the PC's with eigenvalues greater than 1. This gives an upper
+bound, as Kaiser's rule tends to identify more "top" PCs compared to
+other rules.
+
+```{r, include = T}
+print(paste("Kaiser's rule returns the top ", sum(pr.out$sdev > 1), " PCs"))
+
+```
+
+## Scree plot
+
+The scree plot is a more subjective rule that tends to give a lower
+bound, so fewer "top" PCs compared to other rules. In the below scree
+plot the proportion of variance explained (PVE) is plotted against each
+PC. As the first PC captures the most variance, there is a downwards
+trend and we are looking for the point of diminishing returns, i.e. the
+"elbow".
+
+```{r}
+# The SD of the PCs is also the sqrt(eigenvalue) of the covariance matrix
+pr.var <- pr.out$sdev^2
+pve <- pr.var / sum(pr.var)
+
+# Proportion of variance explained
+pve
+```
+
+```{r, include=T}
+plot(pve, xlab = "Principal Component",
+    ylab = "Proportion of Variance Explained", ylim = c(0, 1),
+    type = "b", main = "Scree plot")
+```
+
+Based on the "elbow" of the scree plot, maybe choose the top 5 or 6
+principle components.
+
+## Horns
+
+Horn's parallel analysis is based on a simulations. In the first step a
+random dataset is generated that follows the same distribution as the
+original personality traits dataset. Then PCA is performed on the
+simulated data and the eigenvalue of PC is calculated. In a final step,
+the mean eigenvalue over all simulations per PC are compared to
+eigenvalues from the PCA on the original personality traits dataset.
+Said mean eigenvalues represent a cutoff value, similar to $\lambda>1$
+in Kaiser's rule.
+
+```{r, include=T, warning=F, message=F}
+library(nFactors)
+
+#parallel analysis
+ev <- eigen(cor(df_B))
+ap <- parallel(subject=nrow(df_B), var=ncol(df_B), rep=1000)
+nS <- nScree(x=ev$values, aparallel=ap$eigen$qevpea)
+plotnScree(nS,main="")
+```
+
+For Horn's we want to stay above the green "parallel" line, representing
+the cutoff value. So in our case that would mean choosing the top 5 PCs.
+
+## MAP
+
+Velicer's MAP stands for minimum average partial test. In the first
+step, the partial correlations are computed. Then PCA is performed on
+the original dataset. In a third step, the average squared partial
+correlation is computed per PC, where n is the nth component. Then, the
+optimal number of PCs is chosen by identifying the nth PC with the
+lowest average squared partial correlation.
+
+```{r, message=T}
+library(EFA.dimensions)
+
+# Velicer's MAP
+MAP(df_B, corkind = "pearson", verbose = T)
+```
+
+MAP also suggests top 5 PCs. The code output was intentionally ommited
+here to save space.
+
+## Discussion
+
+All 4 methods agreed on the same answer (top 5 PCs), despite having
+different approaches and levels of complexity. This convergence
+underlines the robustness of the decision making process, as different
+methods usually return different numbers of top PCs. Therefore, I am
+confident that using the top 5 PCs for further analysis sufficiently
+captures the core variability of the original dataset.
+
+# B3
+
+Q: Can you give a meaning to these new/derived variables?
+
+Yes, it is possible to give meaning to these new variables, i.e the top
+5 PCs. But for that we need to perform a rotation such that most
+loadings have a small weight and only a few have a high weight.
+
+To do so, I performed an orthogonal rotation using varimax. I also
+considered an oblique rotation but the resulted loadings were less
+interpretable compared to orthogonal rotation. Therefore, I decided to
+move forward with an orhtogonal rotation. I also considered quartimax
+for the orthogonal rotation but here the results were not that
+interpretable either. Therefore, I decided to use orthogonal rotation
+using varimax in the end.
+
+When plotting the loadings I left the cutoff at the default value of the
+varimax function which is +/- 0.1.
+
+```{r}
+library(EFA.dimensions)
+
+# Orthogonal rotation using varimxax on top 5 PCs
+PC_rotated = varimax(pr.out$rotation[, 1:5])
+PC_rotated$loadings
+```
+
+```{r}
+# Convert the loadings into a dataframe
+loadings_matrix = matrix(nrow = 30, ncol = 5)
+
+for (i in 1:5){
+  loadings_matrix[, i] = PC_rotated$loadings[, i]
+}
+
+rownames(loadings_matrix) = var_B_names
+colnames(loadings_matrix) = c("lds_PC1", "lds_PC2", "lds_PC3", "lds_PC4", "lds_PC5")
+
+loadings_df = as.data.frame(loadings_matrix)
+
+loadings_df
+
+```
+
+```{r}
+# Convert into long format for ggplot
+library(tidyr)
+library(dplyr)
+
+loadings_long = stack(loadings_df)
+
+colnames(loadings_long) = c("All_Loadings", "PC_number")
+
+loadings_long$col = ifelse(abs(loadings_long$All_Loadings) > 0.1, "red", "grey")
+
+# Encode as factor for ggplot
+loadings_long$traits = factor(rep(var_B_names, 5), levels = var_B_names)
+
+loadings_long
+```
+
+```{r, fig.height=10, include=T}
+# Now visualize the loadings with +/- 0.3 as the cutoff
+library(ggplot2)
+
+ggplot(data = loadings_long,
+       mapping = aes(x = traits, y = All_Loadings, fill = as.factor(col)
+                     )) +
+  geom_bar(stat = "identity") +
+  facet_wrap(~ PC_number ) +
+  scale_fill_manual(values = c("grey" = "grey", "red" = "red")) +
+  coord_flip() +
+  theme(legend.position = "none") +
+  labs(title = "Rotated PC loadings", subtitle = "Cut-off at +/- 0.1") +
+  xlab("Origianl variables (30 traits)") + ylab("Loadings")
+```
+
+The rotated loadings as shown in the above figure allign well with the
+[big
+five](https://link.springer.com/referenceworkentry/10.1007/978-1-4419-1005-9_1226)
+personality traits. Based on our data the PC loadings (i.e. weights for
+the original variables) can be interpreted in the following way.
+
+-   Loadings of PC1: **Neuroticism** (with high weights/loadings
+    variables being anxiety, depression, self-consciousness,
+    vulnerability)
+
+-   Loadings of PC2: **Extraversion** (with high weights/loadings
+    variables being gregariousness, positive emotions, warmth,
+    excitement seeking)
+
+-   Loadings of PC3: **Agreeableness** (with high weights/loadings
+    variables being compliance, tender mindedness, straightforwardness,
+    modest)
+
+-   Loadings of PC4: **Conscientiousness** (with high weights/loadings
+    variables being achievement striving, order, self discipline,
+    dutifulness)
+
+-   Loadings of PC5: **Openness** to experience (with high
+    weights/loadings variables being action, aesthetics, fantasy, ideas)
+
+# B4
+
+Q: Can you somehow quantify the degree to which the new/derived
+variables capture the information in the original variables?
+
+Yes, use the proportion of variance explained (PVE) by the top 5 PCs
+before rotation.
+
+```{r, include = T}
+print(paste("The top 5 PCs (no rotation) explain ", sum(pve[1:5]) * 100, "% of the total variance of the dataset"))
+```
+
+The PVE is different for the top 5 PCs after rotation is performed.
+
+```{r, include = T}
+PC_rotated$loadings
+
+print("The top 5 PCs explain 16.7 % of the total variance of the dataset")
+```
+
+This drop in PVE is expected as it is a consequence of the rotation
+process. However, it will not negatively affect the rest of our analysis
+as the new rotated components capture are more specific aspect (i.e.
+focus on the big 5 personalities) of the data compared to the unrotated
+components.
+
+Q: Is it possible to group the study participants in terms of their
+personalities? To this end, use the new/derived variables (and not the
+original ones).
+
+Yes, it is possible. To do so we need to perform matrix multiplication
+with the top 5 loadings, to project the original variables onto the
+space spanned by the top 5 PCs. Then, we can perform different grouping,
+ie. clustering techniques. I will further explain this in question B5.
+
+```{r}
+# Perform for PC1 only (then do for all 5 pcs)
+X_matrix = as.matrix(df_B)
+
+final_PCs = X_matrix %*% loadings_matrix
+
+colnames(final_PCs) = c("Neuroticism", "Extraversion", "Agreeableness", "Conscientiousness", "Openness")
+
+final_PCs = as.data.frame(final_PCs)
+
+head(final_PCs)
+```
+
+```{r}
+# Double check Neuro row 1
+X_matrix[1, ] %*% loadings_matrix[, 1]
+
+# Double check Neuro row 2
+X_matrix[2, ] %*% loadings_matrix[, 1]
+
+# Double check Openess row 1
+X_matrix[1, ] %*% loadings_matrix[, 5]
+
+# Everything seems to have worked !!
+```
+
+```{r}
+# What about unroated PCs? Do they form nicer clouds?
+tmp_PCs = X_matrix %*% pr.out$rotation[, 1:5]
+
+colnames(tmp_PCs) = c("Neuroticism", "Extraversion", "Agreeableness", "Conscientiousness", "Openness")
+
+tmp_PCs = as.data.frame(tmp_PCs)
+
+head(tmp_PCs)
+```
+
+```{r}
+pairs(tmp_PCs)
+```
+
+When plotting the dataset post projection using the 5 new variables (big
+five personality traits) we observe that they form a single cloud of
+points. This was somewhat expected as the new PCs are uncorrelated.
+However, this might have an implication on the number of clusters which
+I will discuss later on.
+
+```{r, include=T}
+pairs(final_PCs)
+
+# We observe nice clouds - showing uncorrelated variabels
+## Not sure how to observe clusters in there
+```
+
+```{r}
+# Check if the data is still normalised
+summary(final_PCs)
+```
+
+<!-- Scatter plot shows perfectly uncorrelated variables. This is was -->
+
+<!-- expected as PCA creates uncorrelated variables. -->
+
+<!-- PCA is about columns and reducing them. Clustering is about -->
+
+<!-- rows/subjects and grouping them by similarities. So depending on the -->
+
+<!-- subjects I sampled, the sample might have different groups. Clusters are -->
+
+<!-- like cliques in high school where your entire dataset represents your -->
+
+<!-- high school dumped into the cafeteria. -->
+
+<!-- In higher dimensional space you can just look at the cluster centroids -->
+
+<!-- to characterize it. There is an RSS equivalent to determine if the -->
+
+<!-- number of clusters was sensible or not. -->
+
+# B5
+
+Q: Which statistical technique(s) can be used to group the participants?
+Explain why it is/they are appropriate.
+
+For this assignment I interpret "grouping participants" as partitioning
+participants into distinct, homogeneous subgroups (clusters) based on
+similar personality traits.
+
+To this end we can use: 1) K means clustering (centroid based) 2)
+Hierarchical clustering (connectivity based) 3) Gaussian mixture
+clustering (distribution based). We will use said clustering algorithms
+on the newly derived variables (rotated PCs). This will allow us to
+describe the clusters/subgroups formed by the 1000 participants (from
+the original dataset) in terms of the big 5 personalities.
+
+K means might be an appropriate algorithm as it a linear algorithm and
+thus fast to run on any dataset. As it is a rather simple method it will
+definitely not overfit the data. However, as it assumes that all
+clusters are of the same size and non-overlapping, there is a chance of
+underfitting, i.e. not correctly capturing the underlying clusters.
+Plus, we need to make an assumption about the number of clusters k,
+meaning we need to perform some hyper parameter tuning.
+
+Hierarchical clustering might be a good alternative as we do not need to
+make an assumption about the number of clusters k. It is also a very
+flexible algorithm and the resulting dendogram can easily be
+interpreted. However, the algorithm is slow to run and very sensitive to
+the chosen distance metric and linkage type. So, some experimentation
+for the different distance metrics and linkage types is required as well
+as exploring a top-down vs a bottom-up approach.
+
+Gaussian mixture clustering (GMC) could also be an appropriate
+algorithm, as it can be seen as the generalized case of K means
+clustering. Or in other words, K means can be seen as a special case of
+the Gaussian mixture clustering with "high bias, low variance" as K
+means assumes spherical, uncorrelated Gaussian clusters. As such, GMC is
+a very flexible method. However, there is a risk of overfitting.
+
+It is hard to tell which clustering technique might be the most fitting
+to the data so I will try out all of them. However, the fact that the
+new variables form a single cloud might be an indicator that we have few
+rather than many clusters.
+
+# B6
+
+Q: How many groups are there? How did you determine this? Thoroughly
+justify your answer (e.g., figures). If you identified more than one
+technique in the previous question, choose two and compare the
+techniques and the obtained results.
+
+Based on my analysis there are 2 subgroups in the dataset of 1000
+participants. I chose K means and GMC as my two main techniques.
+Hierarchical clustering was my sensitivity analysis to help me confirm
+the number of clusters k identified by my main methods. Another reason
+why I chose hierarchical clustering as my secondary method is because of
+question B9.
+
+To determine the optimal number of clusters for K means I used two
+methods: 1) Scree plot of the sum of squared errors over k clusters and
+2) a Silhouette plot. For GMC, I plotted the BIC of all models
+(differentiated by their covariance matrices) over k clusters to
+determine the optimal number of clusters.
+
+For hierachical clustering I visually inspected the dendograms and
+fitted the following linkage types: Complete, single, average and Ward.
+As the distance measures for hierarchical clustering are often context
+depended I just left it at the default (Euclidean distance measure),
+since I do not have access to subject specific expert knowledge.
+Moreover, all variables are mean centered, standardized and uncorrelated
+so the Euclidean distance measured should work without any issues.
+
+I will compare K means against GMC in the discussion section of B6 as
+well as in B8.
+
+## K means
+
+```{r}
+# Data is already scaled and centered
+set.seed(123)
+k_max = 20
+
+# I need to store 1) k 2) K means object 3) PVE 4) TSS
+km_list = vector("list", k_max)
+km_df = data.frame(k = 1:k_max, pve = rep(NA, k_max), tss = rep(NA, k_max))
+
+for (i_clusters in 1:k_max) {
+  km_cluster = kmeans(final_PCs, i_clusters, nstart = 500, iter.max = 100)
+  
+  # Proportion of variance explained (want this to be as high as possible)
+  km_df$pve[i_clusters] = km_cluster$betweenss / km_cluster$totss
+  
+  # Total sum of squares
+  km_df$tss[i_clusters] = km_cluster$tot.withinss
+  
+  # Save kmeans object in list
+  km_list[[i_clusters]] = km_cluster
+}
+
+
+km_df
+```
+
+```{r}
+# Scree plot
+ggplot(data = km_df,
+       mapping = aes(x = k, y = pve)) +
+  geom_point() +
+  geom_line() +
+  scale_x_continuous(breaks = seq(1, k_max, by = 1)) +
+  theme_light()
+
+ggplot(data = km_df,
+       mapping = aes(x = k, y = tss)) +
+  geom_point() +
+  geom_line() +
+  scale_x_continuous(breaks = seq(1, k_max, by = 1)) +
+  theme_light()
+```
+
+```{r, include=T, message=F, fig.height=4}
+# Silhouette plot
+library(factoextra)
+
+# Silhouette method
+fviz_nbclust(final_PCs, kmeans, method = "silhouette", k.max = k_max)
+
+# Ellbow - same results as mine
+fviz_nbclust(final_PCs, kmeans, method = "wss", k.max = k_max)
+```
+
+Scree plot suggests an "elbow" at k = 5. Silhouette plot indicates the
+optimal number of clusters to be k = 2.
+
+## Gaussian Mixture Clustering
+
+```{r, include=T, messages = F, warning = F}
+library(ISLR2)
+library(mclust)
+
+mclust = Mclust(final_PCs, G = 1:k_max)
+plot(mclust, what = "BIC")
+
+#print(paste("Optimal covariance type is ", mclust$icl))
+```
+
+```{r, include = T}
+print(paste("Optimal covariance type and number of clusters are: ", names(mclust$icl)))
+```
+
+EEE means ellipsoidal distribution and equal volume, shape and
+orientation. An ellipsoid cluster means correlated clusters, however,
+the GMC algorithm only identified one cluster as its optimum.
+Nonetheless, the second best BIC value is for k=2 and model EEE, so
+choosing said model might be an interesting alternative as its BIC value
+is still very close to the optimal BIC value.
+
+## Hierachical clustering
+
+```{r, include=T}
+dendroid_text_size = 0.1
+
+# Linkage: complete (maximal inter cluster dissimilarity)
+hclust_complete = hclust(dist(final_PCs), method = "complete")
+plot(hclust_complete, main = "Complete", cex = dendroid_text_size)
+```
+
+All dendograms indicate either 4 or 2 clusters except for the single
+linkage method. Having 5 clusters is unlikely as the heights are too
+close together. Having 3 clusters is also a possibility, e.g. for the
+complete linkage or both of the Ward linkages. I chose to display the
+complete linkage as comparing clusters via their maximal inter cluster
+dissimilarity seemed appropriate. This is analogous to distinguishing
+cliques in a high school cafeteria by their clique leader, which results
+in more pronounced group differences.
+
+```{r}
+hclust_average = hclust(dist(final_PCs), method = "average")
+plot(hclust_average, main = "Average", cex = dendroid_text_size)
+
+hclust_centroid = hclust(dist(final_PCs), method = "centroid")
+plot(hclust_centroid, main = "Centroid", cex = dendroid_text_size)
+
+hclust_single = hclust(dist(final_PCs), method = "single")
+plot(hclust_single, main = "Single", cex = dendroid_text_size)
+
+hclust_ward.D = hclust(dist(final_PCs), method = "ward.D")
+plot(hclust_ward.D, main = "Ward D", cex = dendroid_text_size)
+
+hclust_ward.D2 = hclust(dist(final_PCs), method = "ward.D2")
+plot(hclust_ward.D2, main = "Ward D2", cex = dendroid_text_size)
+```
+
+## Discussion
+
+Let's compare the results obtained by K means versus GMC. K means
+suggests either 2 or 5 clusters, whereas GMC suggests 1 or 2 clusters.
+As previously mentioned, K means is special case of GMC, with spherical,
+uncorrelated Gaussian clusters. As such K means is more biased as it
+makes stricter assumptions about the underlying clusters (ie shape and
+how many). However, both K means and GMC seem to agree at k=2 clusters.
+
+The dendograms suggest either 4 or 2 clusters. Therefore, I decided to
+identify k=2 clusters as all three methods agree on said value.
+
+# B7
+
+Q: How large is each group?
+
+Different methods suggest different group sizes, but K means and GMC
+result in an approximate 1:1 split between the two groups.
+
+## K means
+
+```{r, include=T}
+k_means_2 = km_list[[2]]
+
+print(paste("The 2 groups are of size: "))
+k_means_2$size
+
+```
+
+There were 1000 participants in total and using K means both group are
+pretty much the same size.
+
+## Gaussian Mixture Clustering
+
+```{r, include = T}
+# Fit EEE with k = 2
+gmc_2 = Mclust(final_PCs, modelNames = c("EEE"), G = 2:2)
+
+summary(gmc_2)
+```
+
+Using GMC one group is a bit larger than the other but the 2 groups are
+still roughly the same size. This is expected as the clusters are now
+ellipsoids instead of perfect spheres like in K means.
+
+## Hierachical clustering
+
+Hierachical clustering using the complete linkage suggest more
+unbalanced classes. However, when changing the linkage method to Ward,
+the classes become roughly equal sized. This is because Ward linkage
+approximates clusters obtained by K means.
+
+```{r}
+hclust_complete = hclust(dist(final_PCs), method = "complete")
+# plot(hclust_complete, main = "Complete", cex = dendroid_text_size)
+
+# Cut the tree at the top so that there are only 2 groups
+# ward -> h=400
+# comoplete -> h=15
+hclust_complete_cut = cutree(hclust_complete, h = 15)
+
+hclust_Ward = hclust(dist(final_PCs), method = "ward.D")
+#plot(hclust_Ward, main = "Complete", cex = dendroid_text_size)
+hclust_Ward_cut = cutree(hclust_Ward, h = 400)
+
+# Count the numer of participants per group
+print("Complete linkage")
+table(hclust_complete_cut)
+
+print("Ward linkage")
+table(hclust_Ward_cut)
+```
+
+Dendroid with complete linkage gives an unbalanced class distribution.
+
+## Discussion
+
+Based on my main analysis method (K means and GMC) I conclude that both
+subgroups are roughly of the same size.
+
+# B8
+
+Q: If you identified more than one technique, what are the main
+differences between your chosen methods?
+
+In this section I will compare K means against GMC. As previously
+mentioned K means is a special case of GMC. Before discussing their
+differences I want to briefly cover their similarities.
+
+Both K means and GMC are iterative algorithms with the number of
+clusters k being a pre-determined hyper parameter. Both algorithms start
+by randomly assigning all data points into k subgroups/centroids. Then
+the cluster centroids are computed and all data points are again
+assigned to the a cluster based on their proximity to the closest
+centroid.
+
+The main difference between GMC and K means is that GMC makes no
+implicit assumption about the covariance matrix $\Sigma$. Instead it
+tries out multiple covariance matrices, resulting in different cluster
+shapes, sizes and orientations. Therefore, GMC is low bias, high
+variance compared to K means and there is a potential risk to overfit
+the data. K means on the other assumes independence resulting in
+uncorrelated, spherical Gaussian clusters. Therefore, K means is high
+bias, low variance compared to GMC.
+
+# B9
+
+Q: What are the main differences between the groups in terms of
+personality?
+
+As mentioned in B6 I will use K means and GMC to characterize the 2
+subgroups instead of using hierarchical clustering.
+
+## K means
+
+```{r, include=T}
+k_means_2_df = as.data.frame( k_means_2$centers)
+k_means_2_df
+
+#pairs(k_means_2_df)
+```
+
+Overall, the biggest difference between the 2 groups (based on the
+centroid values) are that one group is well composed and conscientious
+whereas the other group is anxious and careless/not conscientious.
+
+Let's describe the first group in more detail. The first group is not
+neurotic (i.e well composed), extroverted, not agreeable (i.e.
+critical), conscientious/organized and not open/cautious to new
+experiences.
+
+The second group is neurotic/anxious, introverted, agreeable, not
+conscientious (i.e careless) and open to new experiences.
+
+## Gaussian Mixutre Clustering
+
+```{r, include = T}
+# GMC with k = 2
+# Can use "classification" or "uncertainty"
+plot(gmc_2, what = "classification")
+
+# https://cran.r-project.org/web/packages/mclust/vignettes/mclust.html#clustering
+```
+
+Based on the clusters plotted by the GMC we can observe similar
+differences in the 2 subgroups as described by K means. However, the
+plot also shows that the centroids are quite close together, indicating
+that the 2 subgroups might not be that distinctly different from each
+other after all.
+
+The biggest difference as shown by the GMC plot is the Neuroticism
+variable. It seems like there is a clear distinction between one group
+feeling more anxious whereas the other feels more composed. However,
+when considering the other variables the differences are not that big as
+shown by the overlapping cluster clouds.
+
+## Discussion
+
+In conclusion, we can say that the differences in terms of personalities
+are not that distinct between the 2 groups. However, there is enough
+evidence to suggest that the main difference between the 2 groups is the
+Neuroticism variable, i.e. one group is more anxious whilst the other is
+more composed. As a secondary difference the Conscientiousness variable
+can also be considered.

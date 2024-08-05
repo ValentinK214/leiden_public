@@ -1,0 +1,444 @@
+---
+title: "Causal Inference group file"
+author: "Owen Mcwilliams"
+date: "2024-03-27"
+output: html_document
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction
+
+input(What is the file for)
+
+# Research Question
+
+Our question (in words): This study aims at investigating the causal
+effect of anti-hypertensive medication (BPMEDS) on the risk of Death
+
+## Outcome notation
+
+Y(1) is the outcome (death) given that the participant took
+anti-hypertensive medication (BPMEDS=1) Y(0) is the outcome (death)
+given that the participant did not take anti-hypertensive medication
+(BPMEDS=0)
+
+# Data
+
+## Load Data
+
+```{r}
+fram = read.csv("framingham_assignment.csv")
+```
+
+## Data cleaning
+
+```{r}
+#creating our complete cases analysis data 
+cc_fram = na.omit(fram)
+sum(is.na(cc_fram))
+```
+
+
+## Load packages
+
+```{r, message=F}
+## Load packages
+library(dagitty)
+library(ggplot2)
+library(GGally)
+library(gridExtra)
+library(dplyr)
+library(ggdag)
+library(cobalt)
+library(survey)
+library(MatchIt)
+```
+
+# Missing Data
+
+## EDA to check which mechanism
+
+Want to understand if the missingngess is MCAR, MAR, MNAR
+
+```{r}
+dim(fram[!complete.cases(fram),])
+
+na_count = sum(is.na(fram$BPMEDS))+
+sum(is.na(fram$EDUC))+
+sum(is.na(fram$BMI))+
+sum(is.na(fram$HEARTRTE)) 
+
+na_count
+na_count / dim(fram)[1]
+```
+
+There are 193 rows containing NAs (194 NAs in total). So 4.38% of our 
+participants have missing data. Given that this is less than 5% of our whole 
+dataset, the complete case analysis should give valid results. However we 
+will explore the mechanism of missingness within BPMEDS as there are 61 missing
+values, so it would be good to ensure that the missingness will not affect our 
+results. 
+
+## Missingngess of BPMEDS
+
+```{r}
+bpmeds_na_index = which(is.na(fram$BPMEDS))
+bpmeds_na = fram[bpmeds_na_index,]
+print("NO BPMEDS")
+summary(bpmeds_na[,c(2,3,4,5,7,8,9,10)])
+print("ALL DATA")
+summary(fram[,c(2,3,4,5,7,8,9,10)])
+```
+
+Conclusion: There is no extreme difference in distribution for each explanatory 
+variable when comparing between the full dataset and the dataset only comprising 
+of participants that have NAs for BPMEDS. Therefore, our plan of action is to use
+complete case analysis (remove any rows comprising of NAs). 
+
+## BPMEDS vs SEX, AGE, SYSBP
+
+Full dataset vs na dataset for SEX
+```{r}
+table(fram$SEX)
+prop.table(table(fram$SEX))
+
+table(bpmeds_na$SEX)
+prop.table(table(bpmeds_na$SEX))
+```
+
+
+## Conclusion for analysis change
+
+# Study protocol
+
+1)  Eligibility criteria: Framingham community (in 1948) present in 1956
+2)  Exposure definition: use of anti-hypertensive medication (BPMEDS) vs
+    not using anti-hypertensive medication (BPMEDS)
+3)  Assignment procedures: No randomisation - assigned based on medical
+    condition?
+4)  Follow-up period: 24 years Examined every 6 years
+5)  Outcome definition: Binary outcome, death=1, alive=0 (at 1972)
+6)  Causal contrast of interest: E(Y(1)) - E(Y(0)) (population level
+    risk difference)
+7)  Analysis plan: G-computation vs Propensity scores *CHOOSE WHICH ONE*
+
+# DAG
+
+Missing variables: EDUC, CURSMOKE, HEARTRTE, DIABP
+EDA for showing why missing variables are missing
+
+```{r}
+cor(fram$SYSBP, fram$DIABP)
+```
+
+## plotting DAG
+
+```{r, fig.width=6, fig.height=3}
+dag=dagify(
+  #firstly specify the relationships
+  BPMEDS ~ SEX + SYSBP + AGE + BMI,
+  DEATH ~ ANGINA + HOSPMI + STROKE + CVD + HYPERTEN ,
+  ANGINA ~ BPMEDS,
+  HOSPMI ~ BPMEDS,
+  STROKE ~ BPMEDS,
+  HYPERTEN ~ SYSBP,
+  CVD ~ BPMEDS + BMI + AGE,
+  HYPERTEN ~ BPMEDS,
+  exposure = "BPMEDS",
+  outcome = "DEATH",
+  labels=c(
+    DEATH = "DEATH",
+    ANGINA = "ANGINA",
+    HOSPMI = "HOSPMI",
+    BPMEDS = "BPMEDS",
+    EDUC = "EDUC",
+    AGE = "AGE",
+    HYPERTEN = "HYPERTEN",
+    SYSBP = "SYSBP",
+    DIABP = "DIABP",
+    BPMEDS = "BPMEDS",
+    CURSMOKE = "CURSMOKE",
+    CVD = "CVD",
+    BMI = "BMI",
+    SEX = "SEX",
+    STROKE = "STROKE",
+    HEARTRTE = "HEARTRTE"
+  )
+)
+
+# Set dag layout
+theme_set(
+  theme_dag() %+replace%
+    # also add some additional styling
+    theme(
+      legend.position = "bottom",
+      strip.text.x = element_text(margin = margin(2, 0, 2, 0, "mm"))
+    )
+)
+
+
+dag_plot = ggdag(dag,use_labels = "label", text = FALSE, 
+      text_size = 2, node_size = 7, layout = "sugiyama")
+
+dag_plot
+
+# Save as JPEG
+ggsave("dag_img.jpeg", plot = dag_plot, width = 6, height = 3, dpi = 300)
+
+```
+
+Reword this!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!************
+
+Mention: only focusing on the main directed arrows in our DAG as there are 
+a lot of variables meaning there will be associations everywhere. These 
+will overlap and make it difficult to precisely state our adjustment set. 
+
+
+## checking DAG 
+Here we are calculating our minimal adjustment set and ensuring that there is 
+d-separation between BPMEDS and DEATH. 
+
+```{r}
+dag_tidy <- dag |>
+  tidy_dagitty()
+
+#minimal adjustment set
+adjustmentSets(dag)
+```
+
+Testing the DAG to see if we missed any directed edges
+```{r}
+r.val <- localTests(dag, na.omit(fram))
+
+## Adjust using Holm-Bonferroni correction
+## Retain only those tests with adjusted p-value < .05
+r.final = r.val[p.adjust(r.val$p.value) < 0.05, ]
+
+r.final[order(r.final$estimate, decreasing = T), ]
+```
+
+Mention that adapting the DAG based on the above plot will not change the 
+adjustment set. None are associations between BPMEDS and other covariates (only
+association is between BPMEDS and DEATH which is our causal relationship of 
+interest).
+
+
+## final adjustment set
+
+Final adjustment set is {AGE, BMI, SYSBP}
+
+Mention that we don't want to adjust on the mediators (event variables) because
+they show the indirect effect of BPMEDS on DEATH.
+
+The adjustment set reaches d-separation because we have adjusted for all of 
+the forks between BPEMDS and DEATH, whilst not adjusting for the chains as 
+these are mediators, and there are no colliders for BPMEDS and DEATH.
+
+# G-computation (main method)
+
+## Fit the model
+
+With G-computation we will start by fitting a logistic model where our outcome 
+variable is the binary event of death, the explanatory variables are our 
+causal variable of interest (BPMEDS) along with our minimal adjustment set 
+decided from our DAG. 
+
+
+Will decide the best model using information criterion
+
+```{r}
+model1_gc = glm(DEATH ~ BPMEDS + BMI + SYSBP + AGE,
+              family = binomial,
+              data = cc_fram)
+
+summary(model1_gc)
+
+```
+
+
+```{r}
+cc_fram_1 = cc_fram
+cc_fram_1$BPMEDS = 1
+
+E_Yhat_1 = predict(model1_gc, newdata = cc_fram_1, type = "response")
+EY1 = mean(E_Yhat_1)
+
+cc_fram_0 = cc_fram
+cc_fram_0$BPMEDS = 0
+
+E_Yhat_0 = predict(model1_gc, newdata = cc_fram_0, type = "response")
+EY0 = mean(E_Yhat_0)
+
+paste("E(Y(1)) =", round(EY1,3), ", E(Y(0)) =", round(EY0,3))
+paste("Average Treatment Effect (ATE) =", round(EY1-EY0,3))
+
+```
+
+## Check assumptions
+
+(exchangeability and positivity) 
+
+```{r, fig.width=4, fig.height=3}
+theme_set(theme_grey())
+
+par(mfrow = c(1, 3))
+
+p_age = ggplot(data=cc_fram,
+       aes(x=as.factor(BPMEDS), y=AGE, fill = as.factor(BPMEDS)) ) + 
+  geom_boxplot() +
+  labs(x = "BPMEDS") +
+  theme(legend.position = "none")
+
+p_sys = ggplot(data=cc_fram,
+       aes(x=as.factor(BPMEDS), y=SYSBP, fill = as.factor(BPMEDS)) ) + 
+  geom_boxplot() +
+  labs(x = "BPMEDS") +
+  theme(legend.position = "none")
+
+p_bmi = ggplot(data=cc_fram,
+       aes(x=as.factor(BPMEDS), y=BMI, fill = as.factor(BPMEDS))) + 
+  geom_boxplot( ) +
+  labs(x = "BPMEDS") +
+  theme(legend.position = "none")
+
+p_age
+p_sys
+p_bmi
+
+ggsave("age_boxplot.jpeg", plot = p_age, width = 4, height = 3, dpi = 300)
+ggsave("sys_boxplot.jpeg", plot = p_sys, width = 4, height = 3, dpi = 300)
+ggsave("bmi_boxplot.jpeg", plot = p_bmi, width = 4, height = 3, dpi = 300)
+
+
+```
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!! 
+WORK OUT HOW TO CHECK THE CONDITIONAL EXCHANGEABILITY ASSUMPTION
+
+# Propensity scores (sensitivity analysis)
+
+## Fit propensity scores
+
+```{r}
+ps1.model = glm(BPMEDS ~ BMI + SYSBP + AGE, family=binomial, data=cc_fram)
+summary(ps1.model)
+```
+
+```{r}
+cc_fram$ps1 = fitted.values(ps1.model)
+summary(cc_fram$ps1)
+```
+
+## Fit weights model 
+
+```{r}
+cc_fram$ipw1 <- (cc_fram$BPMEDS==1)/cc_fram$ps1+
+                (cc_fram$BPMEDS==0)/(1-cc_fram$ps1)
+summary(cc_fram$ipw1)
+```
+
+
+### Check assumptions
+First checking exchangeability 
+
+```{r}
+vars1 <- c("BMI" , "AGE" , "SYSBP", "SEX", "DIABP", "CURSMOKE", "EDUC",
+           "HEARTRTE")
+covariates <-cc_fram[, vars1]  
+bt = bal.tab(covariates, treat = cc_fram$BPMEDS, weights = cc_fram$ipw1, 
+        method = "weighting", un=TRUE)
+l_plot = love.plot(covariates, treat = cc_fram$BPMEDS, weights = cc_fram$ipw1,
+          method = "weighting",   binary = "std", threshold = .1)
+
+l_plot
+
+ggsave("love_plot.jpeg", plot = l_plot, width = 6, height = 3, dpi = 300)
+```
+After fitting our propensity score model there remain imbalances across the 
+confounders, indicating that the conditional exchangeability assumption is 
+violated. 
+
+Now exploring the positivity assumption:
+
+```{r}
+positivity_plot = ggplot(data=cc_fram) + 
+  geom_density(alpha=0.2, aes(x=ps1, 
+ fill=as.factor(BPMEDS))) + xlim(c(0, 1)) +
+  labs(x = "Propensity score", y = "Density") +
+    guides(
+    fill = guide_legend(order = 1, title = "BPMEDS exposure")
+  ) +
+  theme(legend.position = c(0.85, 0.85)) 
+
+positivity_plot
+
+ggsave("positivit_plot.jpeg", plot = positivity_plot, width = 6, height = 3, dpi = 300)
+```
+
+There is a sufficient overlap so the positivity assumption holds. 
+
+### ATE 
+
+```{r}
+# weighted mean outcome in treatment
+mean1.ipw <-weighted.mean(cc_fram$DEATH[cc_fram$BPMEDS==1], 
+                          w=cc_fram$ipw1[cc_fram$BPMEDS==1])
+mean1.ipw
+
+# weighted mean outcome in untreated
+mean0.ipw <-weighted.mean(cc_fram$DEATH[cc_fram$BPMEDS==0], 
+                          w=cc_fram$ipw1[cc_fram$BPMEDS==0])
+mean0.ipw
+
+# ATE estimate
+mean1.ipw - mean0.ipw
+```
+
+```{r}
+# Calculate ATE with robust Standard errors
+d.w <- svydesign(~1, weights = cc_fram$ipw1, data = cc_fram)
+fit.ipw <- svyglm(DEATH ~ BPMEDS, design = d.w)
+summary(fit.ipw)
+```
+```{r}
+confint(fit.ipw)
+```
+
+
+## Fit
+matching model explore different matching ideas 
+
+```{r}
+m = matchit(BPMEDS ~ BMI + SYSBP + AGE, family=binomial, data=cc_fram)
+summary(m)
+```
+
+```{r}
+md = match.data(m)
+table(md$BPMEDS, md$DEATH)
+prop.table(table(md$BPMEDS, md$DEATH), margin=1)
+```
+### ATT
+```{r}
+att = prop.table(table(md$BPMEDS, md$DEATH), margin=1)[2,2] - 
+      prop.table(table(md$BPMEDS, md$DEATH), margin=1)[1,2]
+att
+```
+
+
+
+# Appendix
+
+## EDA
+
+Talk about imbalance between BPMEDS proportions for whole dataset
+
+### DAG
+
+### Propensity scores

@@ -1,0 +1,197 @@
+---
+title: "Statistical Learning Assignment 2 (Bonus)"
+author: "Valentin Kodderitzsch 3895157"
+date: "2024-05-20"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Q4 Pairwise difference in predictive performance
+
+Read the data and generate train-test split.
+
+```{r}
+# Load the data
+setwd("/Users/valentinkodderitzsch/Coding/r-for-stats/semester_2/statistical_learning/Assignments_graded/assignment_2")
+
+# Read data
+MH_dat <- read.table("MHpredict.csv", sep = ",", header = TRUE, stringsAsFactors = TRUE)
+
+# Encode as factor, needed later for Ctree model
+MH_dat_factor = MH_dat |> mutate_if(is.logical, factor)
+
+
+# Train test split
+set.seed(3895157)
+
+train <- sample(1:nrow(MH_dat), size = 1000) 
+test <- which(!(1:nrow(MH_dat) %in% train))
+```
+
+Load packages and variables from the main report.
+
+```{r}
+# Libraries
+library(foreach)
+library(doParallel)
+library(mgcv)
+library(partykit)
+library(gbm)
+
+# Only use the training set for the bootstrap, test set is NO touch
+MH_boot <- MH_dat_factor[train, ]
+
+# Define a function to compute MSE
+compute_mse <- function(model, data) {
+  predictions <- predict(model, newdata = data)
+  mse <- mean((data$dep_sev_fu - predictions)^2)
+  return(mse)
+}
+
+
+# Save the tuned boosting parameters
+best_ntrees = 500
+best_depth = 5
+best_shrinkage = 0.01
+```
+
+Set number of iterations. Code is run in parallel based on the number of available cores. At each time a new train-test split is randomly generated on the original train set. Let's call the original training set the boot set. The original test is locked up "in the safe" and only used in the main report. At each iteration a new model is fitted using one of the three methods (Ctree, GAM, boosting) and tested using the "test set" of the boot set.
+
+```{r}
+n_iterations = 1000 # 300 was 1 min
+
+start_time <- Sys.time()
+
+# Set the number of cores to use
+num_cores <- detectCores()
+
+# Register parallel backend
+cl <- makeCluster(num_cores)
+registerDoParallel(cl)
+
+# Explicitly load mgcv package in parallel workers
+clusterEvalQ(cl, {
+  library(mgcv)
+  library(partykit)
+  library(gbm)
+})
+
+# Bootstrap loop but run in parallel
+bootstrap_results <- foreach(i = 1:n_iterations, .combine = c) %dopar% {
+  # Divide data into training and testing subsets
+  train_ids <- sample(nrow(MH_boot), size = 0.8 * nrow(MH_boot))  # 80% for training
+  test_ids <- setdiff(1:nrow(MH_boot), train_ids) 
+  
+  # Fit models on the bootstrap sample
+
+  # Set k = ceiling(edf) + 1 as it is the upper bound of the edf
+  # Edf can only be indirectly controlled by k
+  gam_model <- mgcv::gam(dep_sev_fu ~ s(Age, k = 4) + s(IDS, k = 5) + s(BAI, k = 3) + 
+                      s(LCImax, k =2) + s(AO, k = 3) + disType +
+                     bSocPhob + bGAD + bAgo + ADuse + PsychTreat, 
+                   data = MH_dat_factor[train, ], method = "REML")
+  
+  ctree_model <- partykit::ctree(dep_sev_fu ~ ., 
+                                  data = MH_boot[train_ids, ], 
+                                  control = ctree_control(mincriterion = 1- 0.01 ))
+  
+  boost_model <- gbm::gbm(dep_sev_fu ~ ., data = MH_boot[train_ids, ], 
+                     distribution = "gaussian", n.trees = best_ntrees,
+                     interaction.depth = best_depth, shrinkage = best_shrinkage)
+  
+  # Compute MSE for each model using the same test set
+  mse_gam <- compute_mse(gam_model, MH_boot[test_ids, ])
+  mse_ctree <- compute_mse(ctree_model, MH_boot[test_ids, ])
+  mse_boost <- compute_mse(boost_model, MH_boot[test_ids, ])
+  
+  # Return MSEs for this iteration
+  c(mse_gam, mse_ctree, mse_boost)
+}
+
+# Stop the parallel backend
+stopCluster(cl)
+
+# Reshape results
+mse_gam <- bootstrap_results[seq(1, length(bootstrap_results), by = 3)]
+mse_ctree <- bootstrap_results[seq(2, length(bootstrap_results), by = 3)]
+mse_boost <- bootstrap_results[seq(3, length(bootstrap_results), by = 3)]
+
+end_time <- Sys.time()
+print(paste("Elapsed time:", round(difftime(end_time, start_time, units = "secs"), 2), "seconds"))
+
+```
+Compute the pairwise difference and a 95% confidence interval.
+
+```{r}
+# Compute pairwise differences in MSE
+mse_diff_gc <- mse_gam - mse_ctree
+mse_diff_gb <- mse_gam - mse_boost
+mse_diff_cb <- mse_ctree - mse_boost
+
+# Compute confidence intervals for the pairwise differences
+# Compute confidence intervals for the pairwise differences
+alpha <- 0.95
+lower_gc <- quantile(mse_diff_gc, (1 - alpha) / 2)
+upper_gc <- quantile(mse_diff_gc, alpha + (1 - alpha) / 2)
+
+lower_gb <- quantile(mse_diff_gb, (1 - alpha) / 2)
+upper_gb <- quantile(mse_diff_gb, alpha + (1 - alpha) / 2)
+
+lower_cb <- quantile(mse_diff_cb, (1 - alpha) / 2)
+upper_cb <- quantile(mse_diff_cb, alpha + (1 - alpha) / 2)
+
+# Check if 0 is inside the confidence interval for each pairwise difference
+significance_gc <- ifelse(lower_gc <= 0 & upper_gc >= 0, "Not significant", "Significant")
+significance_gb <- ifelse(lower_gb <= 0 & upper_gb >= 0, "Not significant", "Significant")
+significance_cb <- ifelse(lower_cb <= 0 & upper_cb >= 0, "Not significant", "Significant")
+
+# Create dataframe to store results
+results_df <- data.frame(
+  Models = c("GAM vs CTree", "GAM vs Boost", "CTree vs Boost"),
+  Confidence_Interval = c(paste0("[", round(lower_gc, 4), ", ", round(upper_gc, 4), "]"),
+                          paste0("[", round(lower_gb, 4), ", ", round(upper_gb, 4), "]"),
+                          paste0("[", round(lower_cb, 4), ", ", round(upper_cb, 4), "]")),
+  `Significant Pairwise Difference` = c(significance_gc, significance_gb, significance_cb)
+)
+
+# Print results dataframe without row names
+print(results_df, row.names = FALSE)
+```
+
+Compute the MSE and confidence interval.
+
+```{r}
+# Compute mean MSE and confidence intervals
+mean_mse_gam <- mean(mse_gam)
+mean_mse_ctree <- mean(mse_ctree)
+mean_mse_boost <- mean(mse_boost)
+
+ci_mse_gam <- quantile(mse_gam, c(0.025, 0.975))
+ci_mse_ctree <- quantile(mse_ctree, c(0.025, 0.975))
+ci_mse_boost <- quantile(mse_boost, c(0.025, 0.975))
+
+# Create second results dataframe
+mean_results_df <- data.frame(
+  Models = c("GAM", "CTree", "Boost"),
+  Mean_MSE = c(mean_mse_gam, mean_mse_ctree, mean_mse_boost),
+  Confidence_Interval = c(paste0("[", round(ci_mse_gam[1], 4), ", ", round(ci_mse_gam[2], 4), "]"),
+                          paste0("[", round(ci_mse_ctree[1], 4), ", ", round(ci_mse_ctree[2], 4), "]"),
+                          paste0("[", round(ci_mse_boost[1], 4), ", ", round(ci_mse_boost[2], 4), "]"))
+)
+
+# Print second results dataframe
+print(mean_results_df)
+```
+
+
+```{r}
+# Save results as R objects so that I can load them into the main report
+
+save(results_df, file = "MC_pairwise_difference.RData")
+save(mean_results_df, file = "MC_mean_MSE_with_CI.RData")
+```
+
+
