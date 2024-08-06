@@ -21,7 +21,7 @@ This project achieved **top grades** for both the report and code.
 
 
 - **Achievements:**
-  - Received a **very high grade** for my report and code
+  - Received **top grades** for both the report and code
   - Showcased deep understanding of the bias-variance tradeoff
   - Successfully identified the [Big 5](https://en.wikipedia.org/wiki/Big_Five_personality_traits) personality traits
   - Ran all machine learning models effectively in R
