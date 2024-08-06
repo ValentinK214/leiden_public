@@ -1,8 +1,8 @@
 # Data Visualisation Projects
 
-Project 1: General data visualisation types
+[Project 1](#common-data-visualization-types-summary): General data visualisation types
 <br>
-Project 2: Advanced visualisations using ggplot
+[Project 2](#advanced-ggplot-selection): Advanced visualisations using ggplot
 
 ## Common Data Visualization Types Summary
 <img src="../img/long.png" width=75%, alt = "Visualization Preview">
