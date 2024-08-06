@@ -43,24 +43,3 @@ Feel free to explore each project folder for more details.
     - Learnings 
 
 
-## Project 2: Comprehensive Summary of all Data Visualization Types
-<img src="./img/long.png" width=75%, alt = "Visualization Preview">
-
-- **Please open:**
-  - [Summary of Visualization Types](https://github.com/ValentinK214/leiden_public/blob/main/SCwR-data_viz/all_visualistions_doc.pdf).
-
-- **Description:**
-  - This project involves creating a comprehensive document in preparation for the Statistical Computing with R exam. It covers my interpretation of all mono and bivariate visualization types, plus their group comparisions.
-  - Key Technology: R (base, ggplot2)
-
-- **Key Learnings:**
-  1. Identified 11 fundamental visualization types, consolidating diverse visualizations into these categories.
-  2. Recognized that the primary distinction is the factor variable as it decides if a group comparision is needed or not.
-  3. Developed a hyperlinked index for various group comparisons based on the number and type of variables, guiding visualization choices.
-  4. Understood that certain visualizations, like box-plots, can be simplified and categorized into the identified 11 types.
-
-
-- **Interesting Sections from the Report**
-    - Introduction: Hyperlink table
-    - Conclusion: Personal interpretation
-
