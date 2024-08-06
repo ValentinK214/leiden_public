@@ -29,9 +29,10 @@ This group project was part of my [Causal Inference](https://studiegids.universi
     - Critically evaluated results and acknowledged limitations
 
 - **Key Learnings:**
-    - Finding causal relationships is challenging without experimental data
-    - Unmeasured factors can significantly impact results
-    - Working as a team of researchers is fun, especially when you get to bounce ideas and make judgement calls as a group
+    - Identifying causal relationships is challenging
+    - Deeper understanding of **causal inference assumptions** (identifiability, exchangeability, positivity), causal inference **models** (G-computation, propensity score weighting) and DAGs
+    - Deeper understanding of (non) **experimental designs**, their limitations and unmeasured **confounders**
+    - Greatly enjoyed working as a team of researchers, especially the "scientific debates" aspect
 
 - **Interesting Sections from the Report:**
     - Section 3: Research Question
