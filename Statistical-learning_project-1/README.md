@@ -3,6 +3,9 @@
 This machine learning project was part of the [Statistical Learning](https://studiegids.universiteitleiden.nl/en/courses/122141/statistical-learning) module.
 <br>
 It focuses on model selection using the bias-varianc tradeoff, supervised and unsupervised learning techniques.
+<br>
+<br>
+This project achieved **top grades** for both the report and code.
 
 ## Hidden personalities uncovered using AI
 

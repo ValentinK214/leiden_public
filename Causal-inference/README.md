@@ -1,6 +1,9 @@
 # Causal Inference Coursework
 
-This group project was part of my [Causal Inference](https://studiegids.universiteitleiden.nl/en/courses/122091/causal-inference-i) module. Our team of 3 received high marks for both our report and code.
+This group project was part of my [Causal Inference](https://studiegids.universiteitleiden.nl/en/courses/122091/causal-inference-i) module. 
+<br>
+<br>
+Our team of 3 received **high grades** for both our report and code.
 
 
 ## Will you DIE if you take blood pressure medication?
