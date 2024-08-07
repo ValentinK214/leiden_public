@@ -9,7 +9,7 @@ This project achieved **near-perfect grades** for both the report and code.
 
 ## AI explains factors leading to depressions
 
-<img src="../img/sl_2_ctree.png" width=75%, alt = "Algorithm Preview">
+<img src="../img/sl_2_ctree.png" width=75%, alt = "Stats learning 2">
 
 - **Please open:**
   - [Project report (PDF)](https://github.com/ValentinK214/leiden_public/blob/main/Statistical-learning_project-2/report.pdf) - main file
