@@ -7,7 +7,7 @@ The project's goal is to predict and understand the factors contributing to the 
 <br>
 This project achieved **near-perfect grades** for both the report and code.
 
-## AI explains factors leading to depression
+## AI explains factors leading to depressions
 
 <img src="../img/sl_2_ctree.png" width=75%, alt = "Algorithm Preview">
 
@@ -16,7 +16,7 @@ This project achieved **near-perfect grades** for both the report and code.
   - [Bonus question (code)](https://github.com/ValentinK214/leiden_public/blob/main/Statistical-learning_project-2/report.pdf)
 
 - **Description:**
-  - Choose 3 machine learning models
+  - Choose 3 machine learning models out of 15
   - Balance ease of interpretation, predictive power and statistical robustness
   - Justify your choices
   - For detailed information, see the [assignment questions](https://github.com/ValentinK214/leiden_public/blob/main/Statistical-learning_project-2/Q4_bonus_code_as_it_takes_super_long.Rmd). 
@@ -24,10 +24,10 @@ This project achieved **near-perfect grades** for both the report and code.
 
 - **Achievements:**
   - Received **near-perfect grades** for both the report and code
-  - Correctly interpreted model outputs and explained factors leading to depressive severity 
+  - Correctly interpreted model outputs and **explained** factors leading to depressive severity 
   -  Fitted a highly predctive model correctly
-  - Showcased deep understanding of the model selection process
-  - Successfully compared all models using advanced statistical simulations
+  - Showcased **deep understanding** of the model selection process
+  - Successfully compared all models using **advanced statistical simulations**
   - Ran all machine learning models effectively in R
 
 - **Key Learnings (Technical) :**
