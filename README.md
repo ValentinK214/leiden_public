@@ -53,9 +53,9 @@ Topics: **Machine learning, Causal Inference, data visualization**.
 
 ## Causal Inference Project
 
-### [4. Will you DIE if you take blood pressure medication?](https://github.com/ValentinK214/leiden_public/tree/main/Causal-inference#will-you-die-if-you-take-blood-pressure-medication)
+### [4. Will you DIE if you take blood pressure medication?](https://github.com/ValentinK214/leiden_public/tree/main/Causal-inference)
 
-<a href="https://github.com/ValentinK214/leiden_public/tree/main/Causal-inference#will-you-die-if-you-take-blood-pressure-medication">
+<a href="https://github.com/ValentinK214/leiden_public/tree/main/Causal-inference">
   <img src="./img/dag.png" width=75%, alt = "DAG Preview">
 </a>
 
