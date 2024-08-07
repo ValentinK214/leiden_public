@@ -13,13 +13,13 @@ This project achieved **near-perfect grades** for both the report and code.
 
 - **Please open:**
   - [Project report (PDF)](https://github.com/ValentinK214/leiden_public/blob/main/Statistical-learning_project-2/report.pdf) - main file
-  - [Bonus question (code)](https://github.com/ValentinK214/leiden_public/blob/main/Statistical-learning_project-2/report.pdf)
+  - [Bonus question (code)](https://github.com/ValentinK214/leiden_public/blob/main/Statistical-learning_project-2/Q4_bonus_code_as_it_takes_super_long.Rmd)
 
 - **Description:**
   - Choose 3 machine learning models out of 15
   - Balance ease of interpretation, predictive power and statistical robustness
   - Justify your choices
-  - For detailed information, see the [assignment questions](https://github.com/ValentinK214/leiden_public/blob/main/Statistical-learning_project-2/Q4_bonus_code_as_it_takes_super_long.Rmd). 
+  - For detailed information, see the [assignment questions](https://github.com/ValentinK214/leiden_public/blob/main/Statistical-learning_project-2/assignment_questions.pdf). 
 
 
 - **Achievements:**
