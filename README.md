@@ -5,17 +5,24 @@ Welcome to my repository showcasing academic projects from my MSc in Statistics 
 # 7 Projects
 
 **CLICK** on the title or preview image to learn more about each project.
-
+<br>
+<br>
 **Topics**: Deep learning, machine learning, causal inference, data visualization
+<br>
 **Languages**: Python, R
-
+<br>
 
 
 [Project 1](#1-AI-outperforms-humans-on-reading-the-time): Neural networks 
+<br>
 [Project 2](#2-ai-explains-factors-leading-to-depressions): Deep understanding of model selection 
+<br>
 [Project 3](#3-hidden-personalities-uncovered-using-ai): Most interesting results
+<br>
 [Project 4](#4-crafted-complex-machine-learning-algorithm-from-scratch): More computer science, less statistics
+<br>
 [Project 5](#5-will-you-die-if-you-take-blood-pressure-medication): Research and causal inference skills
+<br>
 [Project 6](#6-advanced-ggplot-selection) and [7](#6-common-data-visualization-types-summary): Data visualization skills and theory
 
 
