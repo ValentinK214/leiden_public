@@ -23,7 +23,7 @@ Welcome to my repository showcasing academic projects from my MSc in Statistics 
 <br>
 [Project 5](#5-will-you-die-if-you-take-blood-pressure-medication): Research and causal inference skills
 <br>
-[Project 6](#6-advanced-ggplot-selection) and [7](#6-common-data-visualization-types-summary): Data visualization skills and theory
+[Project 6](#6-advanced-ggplot-selection) and [7](#7-common-data-visualization-types-summary): Data visualization skills and theory
 
 
 ## Deep Learning Project (Python)
