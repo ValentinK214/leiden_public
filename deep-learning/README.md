@@ -24,7 +24,7 @@ Our model was the **#1 performing model in a cohort of 300+ students** and we re
 
 
 - **Achievements:**
-  - **#1 performing model in a cohort of 300+ students**
+  - In a team of 3, achieved the **#1 performing model among 300+ students**
   - Near perfect grade of 9.5/10
   - Model misreads time by only 1.02 minutes (beating us developers on a random subset of high glare + upside down clock pictures)
 
